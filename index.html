@@ -12,10 +12,10 @@
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   
-  <!-- Babel Standalone for in-browser JSX parsing -->
+  <!-- Babel Standalone -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
-  <!-- Paho MQTT over Secure WebSockets (Cross-device cloud sync) -->
+  <!-- Paho MQTT WebSockets for cross-device synchronization -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
 
   <style>
@@ -29,13 +29,13 @@
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-amber-500 selection:text-black">
+<body class="bg-[#0b0f17] text-slate-100 min-h-screen selection:bg-amber-500 selection:text-black">
   <div id="root"></div>
 
   <script type="text/babel">
     const { useState, useEffect, useRef, useMemo } = React;
 
-    // --- AUDIO SYNTHESIZER ENGINE ---
+    // --- SOUND ENGINE ---
     class SoundEngine {
       constructor() {
         this.ctx = null;
@@ -112,32 +112,14 @@
           osc.stop(this.ctx.currentTime + idx * 0.07 + 0.3);
         });
       }
-      playCheer() {
-        if (this.muted) return;
-        this.init();
-        if (!this.ctx) return;
-        const melody = [440, 554, 659, 880];
-        melody.forEach((freq, idx) => {
-          const osc = this.ctx.createOscillator();
-          const gain = this.ctx.createGain();
-          osc.connect(gain);
-          gain.connect(this.ctx.destination);
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.1);
-          gain.gain.setValueAtTime(0.15, this.ctx.currentTime + idx * 0.1);
-          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.1 + 0.4);
-          osc.start(this.ctx.currentTime + idx * 0.1);
-          osc.stop(this.ctx.currentTime + idx * 0.1 + 0.4);
-        });
-      }
     }
     const sounds = new SoundEngine();
 
-    // --- OFFICIAL BRAND LOGO COMPONENT ---
-    const OfficialLogo = ({ className = "h-10", showText = true }) => {
+    // --- OFFICIAL BRAND LOGO ---
+    const OfficialLogo = ({ className = "h-8", showText = true }) => {
       const [imgFailed, setImgFailed] = useState(false);
       return (
-        <div className={`flex items-center gap-3 select-none ${className}`}>
+        <div className={`flex items-center gap-2.5 select-none ${className}`}>
           {!imgFailed ? (
             <img 
               src="Logo Game.png" 
@@ -147,20 +129,20 @@
             />
           ) : (
             <div className="flex items-center gap-2">
-              <svg viewBox="0 0 100 65" className="h-full w-auto fill-none stroke-current" style={{ minWidth: '42px' }}>
+              <svg viewBox="0 0 100 65" className="h-full w-auto fill-none" style={{ minWidth: '38px' }}>
                 <path d="M 28 20 L 38 7 L 50 17 L 62 7 L 72 20 Z" stroke="#f97316" strokeWidth="3" strokeLinejoin="round" fill="none" />
                 <path d="M 46 22 L 72 22 C 84 22, 92 30, 92 42 C 92 54, 82 62, 70 62 L 54 62 C 46 62, 40 56, 38 48" stroke="#f97316" strokeWidth="4" strokeLinecap="round" />
-                <circle cx="78" cy="36" r="3.5" fill="#f97316" stroke="none" />
-                <circle cx="86" cy="44" r="3.5" fill="#f97316" stroke="none" />
-                <circle cx="70" cy="44" r="3.5" fill="#f97316" stroke="none" />
-                <circle cx="78" cy="52" r="3.5" fill="#f97316" stroke="none" />
+                <circle cx="78" cy="36" r="3.5" fill="#f97316" />
+                <circle cx="86" cy="44" r="3.5" fill="#f97316" />
+                <circle cx="70" cy="44" r="3.5" fill="#f97316" />
+                <circle cx="78" cy="52" r="3.5" fill="#f97316" />
                 <path d="M 16 38 L 48 24 L 56 36 L 24 50 Z" stroke="#f97316" strokeWidth="3.5" strokeLinejoin="round" />
                 <path d="M 12 52 C 20 52, 28 42, 34 38 C 40 34, 46 36, 50 42 C 44 48, 38 58, 22 62" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" />
               </svg>
               {showText && (
                 <div className="flex flex-col leading-none">
-                  <span className="text-[10px] tracking-widest text-slate-400 font-semibold uppercase">BY: RJR</span>
-                  <div className="flex text-lg font-black tracking-tight">
+                  <span className="text-[9px] tracking-widest text-slate-400 font-semibold uppercase">BY: RJR</span>
+                  <div className="flex text-base font-black tracking-tight">
                     <span className="text-white">GAME</span>
                     <span className="text-amber-500 ml-1">MASTER</span>
                   </div>
@@ -172,28 +154,26 @@
       );
     };
 
-    // --- PRESET PERFUMES ---
+    // --- DEFAULT PERFUME INVENTORY ---
     const DEFAULT_ROUNDS = [
       {
-        id: "round-1",
-        name: "Prada Paradoxe",
-        option1: "Prada",
-        option2: "Prada Milano",
-        // Clean vector close-up
-        guessImage: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 300' width='100%' height='100%'><rect width='300' height='300' fill='%230f172a'/><polygon points='150,40 270,240 30,240' fill='%23fb7185'/><rect x='130' y='18' width='40' height='24' fill='%231e293b' rx='4'/><text x='150' y='165' fill='white' font-family='sans-serif' font-size='22' font-weight='900' text-anchor='middle' letter-spacing='4'>P R A D A</text></svg>",
-        revealImage: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 300' width='100%' height='100%'><rect width='300' height='300' fill='%23090d16'/><polygon points='150,40 270,240 30,240' fill='%23f43f5e'/><rect x='130' y='18' width='40' height='24' fill='%230f172a' rx='4'/><text x='150' y='165' fill='white' font-family='sans-serif' font-size='22' font-weight='900' text-anchor='middle' letter-spacing='4'>P R A D A</text><text x='150' y='195' fill='%23ffe4e6' font-family='sans-serif' font-size='11' font-weight='700' text-anchor='middle' letter-spacing='3'>PARADOXE</text></svg>"
-      },
-      {
-        id: "round-2",
+        id: "item-1",
         name: "1 Million Elixir",
         option1: "Rabanne",
         option2: "Paco Rabanne",
-        guessImage: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 300' width='100%' height='100%'><rect width='300' height='300' fill='%230f172a'/><rect x='70' y='40' width='160' height='220' rx='16' fill='%23d97706'/><text x='150' y='155' fill='white' font-family='sans-serif' font-size='18' font-weight='900' text-anchor='middle'>1 MILLION</text></svg>",
-        revealImage: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 300' width='100%' height='100%'><rect width='300' height='300' fill='%23090d16'/><rect x='70' y='30' width='160' height='240' rx='18' fill='%23b45309'/><text x='150' y='150' fill='white' font-family='sans-serif' font-size='20' font-weight='900' text-anchor='middle'>1 MILLION</text><text x='150' y='180' fill='%23fef3c7' font-family='sans-serif' font-size='12' font-weight='700' text-anchor='middle'>ELIXIR</text></svg>"
+        guessImage: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 300'><rect width='300' height='300' fill='%23111827'/><rect x='80' y='50' width='140' height='200' rx='16' fill='%23d97706'/><text x='150' y='145' fill='white' font-family='sans-serif' font-size='18' font-weight='900' text-anchor='middle'>1 MILLION</text><text x='150' y='175' fill='%23fef3c7' font-family='sans-serif' font-size='12' font-weight='700' text-anchor='middle'>ELIXIR</text></svg>",
+        revealImage: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 300'><rect width='300' height='300' fill='%230b0f17'/><rect x='70' y='35' width='160' height='230' rx='18' fill='%23b45309'/><polygon points='150,75 190,140 110,140' fill='%23fef3c7'/><text x='150' y='180' fill='white' font-family='sans-serif' font-size='18' font-weight='900' text-anchor='middle'>1 MILLION</text><text x='150' y='205' fill='%23fde68a' font-family='sans-serif' font-size='11' font-weight='700' text-anchor='middle'>ELIXIR</text></svg>"
+      },
+      {
+        id: "item-2",
+        name: "Prada Paradoxe",
+        option1: "Prada",
+        option2: "Prada Milano",
+        guessImage: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 300'><rect width='300' height='300' fill='%23111827'/><polygon points='150,50 260,230 40,230' fill='%23fb7185'/><text x='150' y='160' fill='white' font-family='sans-serif' font-size='20' font-weight='900' text-anchor='middle' letter-spacing='3'>PRADA</text></svg>",
+        revealImage: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 300'><rect width='300' height='300' fill='%230b0f17'/><polygon points='150,45 270,240 30,240' fill='%23f43f5e'/><rect x='135' y='22' width='30' height='20' fill='%231f2937' rx='3'/><text x='150' y='160' fill='white' font-family='sans-serif' font-size='22' font-weight='900' text-anchor='middle' letter-spacing='4'>PRADA</text><text x='150' y='190' fill='%23ffe4e6' font-family='sans-serif' font-size='11' font-weight='700' text-anchor='middle' letter-spacing='2'>PARADOXE</text></svg>"
       }
     ];
 
-    // --- MAIN APPLICATION ---
     function App() {
       const urlParams = new URLSearchParams(window.location.search);
       const urlRole = urlParams.get('role');
@@ -201,8 +181,7 @@
 
       // Current view & room settings
       const [role, setRole] = useState(urlRole === 'contestant' ? 'contestant' : 'gm');
-      const [roomCode, setRoomCode] = useState(urlRoom);
-      const [showGmLogin, setShowGmLogin] = useState(false);
+      const [roomCode] = useState(urlRoom);
       const [gmPasscode, setGmPasscode] = useState('');
       const [gmAuthenticated, setGmAuthenticated] = useState(false);
       const [activeTab, setActiveTab] = useState('arena'); // 'arena' | 'items'
@@ -212,11 +191,9 @@
       const [inputName, setInputName] = useState('');
       const [contestantGuess, setContestantGuess] = useState('');
       const [hasSubmitted, setHasSubmitted] = useState(false);
+      const [netStatus, setNetStatus] = useState('connecting');
 
-      // Connection Status
-      const [netStatus, setNetStatus] = useState('connecting'); // 'live' | 'connecting' | 'offline'
-
-      // Perfume Items List (Managed by GM)
+      // Perfume Inventory List
       const [rounds, setRounds] = useState(() => {
         try {
           const saved = localStorage.getItem('perfume_custom_rounds');
@@ -226,177 +203,153 @@
         }
       });
 
-      // Synchronized Game State
-      // RULE: ALWAYS initialize status as 'waiting' to avoid landing on revealed screens!
+      // --- CRITICAL PRADA FIX: ALWAYS START IN 'waiting' STATUS ---
       const [gameState, setGameState] = useState({
-        status: 'waiting', // 'waiting' | 'guessing' | 'revealed' | 'ended'
+        status: 'waiting', // Enforced: never starts on 'revealed'
         roundIndex: 0,
         timer: 10,
         endTime: null,
-        players: [],
-        sessionUid: Date.now()
+        players: []
       });
 
-      // Local countdown remaining seconds
       const [timeLeft, setTimeLeft] = useState(10);
       const [soundMuted, setSoundMuted] = useState(false);
+      const [showShareModal, setShowShareModal] = useState(false);
 
-      // Modal state for Add Item
-      const [showAddModal, setShowAddModal] = useState(false);
-      const [newItem, setNewItem] = useState({
-        name: '',
-        option1: '',
-        option2: '',
-        guessImage: '',
-        revealImage: ''
-      });
-
-      // Refs for sync loop
+      // Refs
       const mqttClientRef = useRef(null);
       const gameStateRef = useRef(gameState);
       gameStateRef.current = gameState;
       const roleRef = useRef(role);
       roleRef.current = role;
 
-      // Clean old stale localStorage on load
+      // Clean out any stale 'revealed' cache on load
       useEffect(() => {
         try {
           localStorage.removeItem('perfume_game_state');
         } catch(e) {}
       }, []);
 
-      // Synchronize SoundEngine mute
       useEffect(() => {
         sounds.muted = soundMuted;
       }, [soundMuted]);
 
-      // --- MQTT REAL-TIME ENGINE (CROSS-DEVICE) ---
+      // --- MQTT SYNCHRONIZATION ---
       useEffect(() => {
-        const topic = `giv-perfume-game-v3/${roomCode}`;
+        const topic = `giv-perfume-game-room/${roomCode}`;
         const clientId = `client_${Math.random().toString(16).substr(2, 8)}`;
         
-        // Primary: HiveMQ over SSL; fallback: EMQX
-        const brokerHost = 'broker.hivemq.com';
-        const brokerPort = 8884;
+        const client = new window.Paho.MQTT.Client('broker.hivemq.com', 8884, '/mqtt', clientId);
+        mqttClientRef.current = client;
 
-        if (window.Paho && window.Paho.MQTT) {
-          const client = new window.Paho.MQTT.Client(brokerHost, brokerPort, '/mqtt', clientId);
-          mqttClientRef.current = client;
+        client.onConnectionLost = () => {
+          setNetStatus('connecting');
+          setTimeout(() => {
+            try { client.connect(connectOptions); } catch(e){}
+          }, 3000);
+        };
 
-          client.onConnectionLost = (responseObject) => {
-            setNetStatus('connecting');
-            setTimeout(() => {
-              try { client.connect(connectOptions); } catch(e){}
-            }, 3000);
-          };
-
-          client.onMessageArrived = (message) => {
-            try {
-              const data = JSON.parse(message.payloadString);
-              if (data.senderId === clientId) return; // Ignore local echoes
-
-              if (data.type === 'STATE_UPDATE') {
-                setGameState(prev => {
-                  // If timer just started
-                  if (prev.status === 'waiting' && data.state.status === 'guessing') {
-                    sounds.playTick();
-                    setHasSubmitted(false);
-                    setContestantGuess('');
-                  }
-                  if (data.state.status === 'revealed' && prev.status !== 'revealed') {
-                    sounds.playReveal();
-                  }
-                  return { ...prev, ...data.state };
-                });
-              } else if (data.type === 'PLAYER_JOIN') {
-                if (roleRef.current === 'gm') {
-                  setGameState(prev => {
-                    const exists = prev.players.find(p => p.id === data.player.id || p.name.toLowerCase() === data.player.name.toLowerCase());
-                    let newPlayers;
-                    if (exists) {
-                      newPlayers = prev.players.map(p => (p.id === data.player.id || p.name.toLowerCase() === data.player.name.toLowerCase()) ? { ...p, id: data.player.id, active: true } : p);
-                    } else {
-                      newPlayers = [...prev.players, { ...data.player, score: 0, currentGuess: '', isCorrect: null }];
-                    }
-                    const updated = { ...prev, players: newPlayers };
-                    broadcastState(updated);
-                    return updated;
-                  });
-                }
-              } else if (data.type === 'PLAYER_SUBMIT') {
-                if (roleRef.current === 'gm') {
-                  setGameState(prev => {
-                    const updatedPlayers = prev.players.map(p => {
-                      if (p.name.toLowerCase() === data.playerName.toLowerCase()) {
-                        return { ...p, currentGuess: data.guess };
-                      }
-                      return p;
-                    });
-                    const updated = { ...prev, players: updatedPlayers };
-                    broadcastState(updated);
-                    return updated;
-                  });
-                }
-              } else if (data.type === 'GAME_RESET') {
-                // Game Master reset: clear names & return contestants to home
-                localStorage.removeItem('perfume_player_name');
-                setPlayerName('');
-                setContestantGuess('');
-                setHasSubmitted(false);
-                setGameState(prev => ({
-                  ...prev,
-                  status: 'waiting',
-                  roundIndex: 0,
-                  players: []
-                }));
-              }
-            } catch (err) {
-              console.error("MQTT message parse error:", err);
-            }
-          };
-
-          const connectOptions = {
-            useSSL: true,
-            timeout: 5,
-            keepAliveInterval: 30,
-            cleanSession: true,
-            onSuccess: () => {
-              setNetStatus('live');
-              client.subscribe(topic, { qos: 0 });
-              // If joining as contestant with a name, announce presence immediately
-              const currentName = localStorage.getItem('perfume_player_name');
-              if (currentName) {
-                publishMessage({
-                  type: 'PLAYER_JOIN',
-                  player: { id: clientId, name: currentName }
-                });
-              }
-            },
-            onFailure: () => {
-              setNetStatus('offline');
-            }
-          };
-
+        client.onMessageArrived = (message) => {
           try {
-            client.connect(connectOptions);
-          } catch(e) {
+            const data = JSON.parse(message.payloadString);
+            if (data.senderId === clientId) return;
+
+            if (data.type === 'STATE_UPDATE') {
+              setGameState(prev => {
+                if (prev.status === 'waiting' && data.state.status === 'guessing') {
+                  sounds.playTick();
+                  setHasSubmitted(false);
+                  setContestantGuess('');
+                }
+                if (data.state.status === 'revealed' && prev.status !== 'revealed') {
+                  sounds.playReveal();
+                }
+                return { ...prev, ...data.state };
+              });
+            } else if (data.type === 'PLAYER_JOIN') {
+              if (roleRef.current === 'gm') {
+                setGameState(prev => {
+                  const exists = prev.players.find(p => p.id === data.player.id || p.name.toLowerCase() === data.player.name.toLowerCase());
+                  let newPlayers;
+                  if (exists) {
+                    newPlayers = prev.players.map(p => (p.id === data.player.id || p.name.toLowerCase() === data.player.name.toLowerCase()) ? { ...p, id: data.player.id } : p);
+                  } else {
+                    newPlayers = [...prev.players, { ...data.player, score: 0, currentGuess: '', isCorrect: null }];
+                  }
+                  const updated = { ...prev, players: newPlayers };
+                  broadcastState(updated);
+                  return updated;
+                });
+              }
+            } else if (data.type === 'PLAYER_SUBMIT') {
+              if (roleRef.current === 'gm') {
+                setGameState(prev => {
+                  const updatedPlayers = prev.players.map(p => {
+                    if (p.name.toLowerCase() === data.playerName.toLowerCase()) {
+                      return { ...p, currentGuess: data.guess };
+                    }
+                    return p;
+                  });
+                  const updated = { ...prev, players: updatedPlayers };
+                  broadcastState(updated);
+                  return updated;
+                });
+              }
+            } else if (data.type === 'GAME_RESET') {
+              localStorage.removeItem('perfume_player_name');
+              setPlayerName('');
+              setContestantGuess('');
+              setHasSubmitted(false);
+              setGameState({
+                status: 'waiting',
+                roundIndex: 0,
+                timer: 10,
+                endTime: null,
+                players: []
+              });
+            }
+          } catch (err) {}
+        };
+
+        const connectOptions = {
+          useSSL: true,
+          timeout: 5,
+          keepAliveInterval: 30,
+          cleanSession: true,
+          onSuccess: () => {
+            setNetStatus('live');
+            client.subscribe(topic, { qos: 0 });
+            const currentName = localStorage.getItem('perfume_player_name');
+            if (currentName) {
+              publishMessage({
+                type: 'PLAYER_JOIN',
+                player: { id: clientId, name: currentName }
+              });
+            }
+          },
+          onFailure: () => {
             setNetStatus('offline');
           }
+        };
 
-          return () => {
-            try { client.disconnect(); } catch(e){}
-          };
+        try {
+          client.connect(connectOptions);
+        } catch(e) {
+          setNetStatus('offline');
         }
+
+        return () => {
+          try { client.disconnect(); } catch(e){}
+        };
       }, [roomCode]);
 
-      // Publish helper
       const publishMessage = (payload) => {
         if (mqttClientRef.current && mqttClientRef.current.isConnected()) {
           const message = new window.Paho.MQTT.Message(JSON.stringify({
             ...payload,
             senderId: mqttClientRef.current.clientId
           }));
-          message.destinationName = `giv-perfume-game-v3/${roomCode}`;
+          message.destinationName = `giv-perfume-game-room/${roomCode}`;
           message.retained = false;
           mqttClientRef.current.send(message);
         }
@@ -409,16 +362,16 @@
         });
       };
 
-      // Periodic Game Master Pulse (Every 2.5s) to sync new players seamlessly
+      // Periodic GM state sync
       useEffect(() => {
         if (role !== 'gm') return;
         const interval = setInterval(() => {
           broadcastState(gameStateRef.current);
-        }, 2500);
+        }, 3000);
         return () => clearInterval(interval);
       }, [role]);
 
-      // --- LOCAL TIMER SYNCHRONIZATION ---
+      // Timer countdown effect
       useEffect(() => {
         let timerId;
         if (gameState.status === 'guessing' && gameState.endTime) {
@@ -436,7 +389,6 @@
               clearInterval(timerId);
               sounds.playBuzzer();
               if (roleRef.current === 'gm') {
-                // Timer finished: transition automatically to locked
                 handleRevealAnswer();
               }
             }
@@ -447,17 +399,15 @@
         return () => clearInterval(timerId);
       }, [gameState.status, gameState.endTime]);
 
-      // Current active round object
       const currentRound = rounds[gameState.roundIndex] || rounds[0] || DEFAULT_ROUNDS[0];
 
-      // --- GAME MASTER ACTIONS ---
+      // --- GM ACTION HANDLERS ---
       const handleStartTimer = () => {
         sounds.init();
         sounds.playTick();
         const duration = 10;
         const endTime = Date.now() + duration * 1000;
         
-        // Reset players round guess statuses
         const resetPlayers = gameState.players.map(p => ({
           ...p,
           currentGuess: '',
@@ -478,7 +428,6 @@
       const handleRevealAnswer = () => {
         sounds.playReveal();
 
-        // Calculate auto results
         const opt1 = (currentRound.option1 || '').trim().toLowerCase();
         const opt2 = (currentRound.option2 || '').trim().toLowerCase();
         const allowOpt2 = opt2 && opt2 !== 'n/a' && opt2 !== 'na';
@@ -513,7 +462,7 @@
         const nextIndex = (gameState.roundIndex + 1) % rounds.length;
         const next = {
           ...gameState,
-          status: 'waiting', // Returns everyone to the clean waiting lobby!
+          status: 'waiting', // Return everyone cleanly to waiting lobby
           roundIndex: nextIndex,
           timer: 10,
           endTime: null
@@ -522,45 +471,32 @@
         broadcastState(next);
       };
 
-      const handleForceResetLobby = () => {
-        // Forces all devices back to waiting lobby
-        const next = {
-          ...gameState,
-          status: 'waiting',
-          endTime: null,
-          timer: 10
-        };
-        setGameState(next);
-        broadcastState(next);
-      };
-
       const handleRestartGame = () => {
-        if (!confirm("Are you sure? This will reset all scores, clear players, and return contestants to the home screen.")) return;
+        if (!confirm("Reset all scores and return contestants to home screen?")) return;
         const next = {
           status: 'waiting',
           roundIndex: 0,
           timer: 10,
           endTime: null,
-          players: [],
-          sessionUid: Date.now()
+          players: []
         };
         setGameState(next);
         publishMessage({ type: 'GAME_RESET' });
         broadcastState(next);
       };
 
-      const handleScoreAdjust = (playerName, delta) => {
+      const handleScoreAdjust = (name, delta) => {
         setGameState(prev => {
           const updated = {
             ...prev,
-            players: prev.players.map(p => p.name === playerName ? { ...p, score: Math.max(0, p.score + delta) } : p)
+            players: prev.players.map(p => p.name === name ? { ...p, score: Math.max(0, p.score + delta) } : p)
           };
           broadcastState(updated);
           return updated;
         });
       };
 
-      // --- CONTESTANT ACTIONS ---
+      // --- CONTESTANT HANDLERS ---
       const handleRegisterName = (e) => {
         e.preventDefault();
         const trimmed = inputName.trim();
@@ -585,31 +521,28 @@
         });
       };
 
-      // Top Leader calculation for contestant banner (Anonymous: "Player No.1 (3p)")
       const anonymousLeader = useMemo(() => {
-        if (!gameState.players || gameState.players.length === 0) return "No scores yet";
+        if (!gameState.players || gameState.players.length === 0) return "0 pts";
         const sorted = [...gameState.players].sort((a,b) => b.score - a.score);
-        if (sorted[0].score === 0) return "No points yet";
-        return `Player No.1 (${sorted[0].score}p)`;
+        return sorted[0].score > 0 ? `Player No.1 (${sorted[0].score}p)` : "0 pts";
       }, [gameState.players]);
 
       const myPlayerData = useMemo(() => {
         return gameState.players.find(p => p.name.toLowerCase() === playerName.toLowerCase()) || { score: 0 };
       }, [gameState.players, playerName]);
 
-      // --- RENDER CONTESTANT VIEW ---
+      // --- CONTESTANT SCREEN RENDER ---
       if (role === 'contestant') {
-        // Step 1: If name is not yet entered, display Name Entry Screen
         if (!playerName) {
           return (
-            <div className="min-h-screen flex items-center justify-center p-4 bg-slate-950">
-              <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-center space-y-6">
+            <div className="min-h-screen flex items-center justify-center p-4 bg-[#0b0f17]">
+              <div className="w-full max-w-sm bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-2xl text-center space-y-6">
                 <div className="flex justify-center">
-                  <OfficialLogo className="h-14" />
+                  <OfficialLogo className="h-12" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-white tracking-tight">Join Perfume Game</h1>
-                  <p className="text-slate-400 text-sm mt-1">Room: <span className="text-amber-400 font-mono font-bold">{roomCode}</span></p>
+                  <h1 className="text-xl font-bold text-white tracking-tight">Join Perfume Game</h1>
+                  <p className="text-slate-400 text-xs mt-1">Room: <span className="text-amber-400 font-mono font-bold">{roomCode}</span></p>
                 </div>
                 <form onSubmit={handleRegisterName} className="space-y-4">
                   <input
@@ -618,20 +551,17 @@
                     placeholder="Enter your nickname..."
                     value={inputName}
                     onChange={(e) => setInputName(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 text-center font-bold text-lg"
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 text-center font-bold text-base"
                   />
                   <button
                     type="submit"
-                    className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl shadow-lg transition active:scale-95"
+                    className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black rounded-xl shadow-lg transition active:scale-95"
                   >
                     Enter Game Arena ➔
                   </button>
                 </form>
                 <div className="pt-2">
-                  <button 
-                    onClick={() => { setRole('gm'); }} 
-                    className="text-xs text-slate-500 hover:text-slate-300 underline"
-                  >
+                  <button onClick={() => setRole('gm')} className="text-xs text-slate-500 hover:text-slate-300 underline">
                     Switch to Game Master
                   </button>
                 </div>
@@ -640,55 +570,60 @@
           );
         }
 
-        // Contestant Header
         const ContestantHeader = () => (
-          <header className="px-4 py-3 bg-slate-900/80 backdrop-blur border-b border-slate-800 flex items-center justify-between sticky top-0 z-30">
+          <header className="px-4 py-3 bg-slate-900/90 backdrop-blur border-b border-slate-800 flex items-center justify-between sticky top-0 z-30">
             <div className="flex items-center gap-2">
               <OfficialLogo className="h-7" showText={false} />
               <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-bold text-sm text-white">{playerName}</span>
+                <div className="flex items-center gap-1.5 leading-none">
+                  <span className="font-bold text-xs text-slate-400 uppercase">CONTESTANT</span>
                   <span className={`inline-block w-2 h-2 rounded-full ${netStatus === 'live' ? 'bg-emerald-400' : 'bg-amber-400 animate-ping'}`} />
                 </div>
-                <span className="text-[10px] text-slate-400 font-mono">ROOM: {roomCode}</span>
+                <div className="font-bold text-sm text-white flex items-center gap-1 mt-0.5">
+                  {playerName}
+                  <button onClick={() => { setPlayerName(''); localStorage.removeItem('perfume_player_name'); }} className="text-[10px] text-slate-400 font-normal hover:text-white underline">
+                    (Edit)
+                  </button>
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <div className="bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-lg text-xs font-semibold text-amber-400">
-                Leader: {anonymousLeader}
+              <div className="bg-slate-800/80 border border-slate-700 px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-300">
+                <span className="text-[10px] text-slate-400 block uppercase leading-none">Leader</span>
+                <span className="text-amber-400 font-bold">{anonymousLeader}</span>
               </div>
-              <div className="bg-amber-500/20 border border-amber-500/40 text-amber-300 px-2.5 py-1 rounded-lg text-xs font-black">
-                {myPlayerData.score} pts
+              <div className="bg-slate-800 border border-slate-700 text-amber-400 px-2.5 py-1 rounded-lg text-xs font-black flex items-center gap-1">
+                <span>🏆</span>
+                <span>{myPlayerData.score}</span>
               </div>
             </div>
           </header>
         );
 
-        // State A: WAITING LOBBY (Active when status === 'waiting')
+        // 1. WAITING LOBBY (Always shown before Game Master clicks Start)
         if (gameState.status === 'waiting') {
           return (
-            <div className="min-h-screen flex flex-col bg-slate-950">
+            <div className="min-h-screen flex flex-col bg-[#0b0f17]">
               <ContestantHeader />
               <main className="flex-1 max-w-md w-full mx-auto p-4 flex flex-col items-center justify-center text-center space-y-6">
                 
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold animate-pulse-slow">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
                   Waiting for Game Master to start...
                 </div>
 
                 <div className="py-2">
-                  <OfficialLogo className="h-16 mx-auto justify-center" />
+                  <OfficialLogo className="h-14 mx-auto justify-center" />
                   <h2 className="text-2xl font-black text-white mt-4">Get Ready, {playerName}!</h2>
-                  <p className="text-slate-400 text-sm max-w-xs mt-1">
+                  <p className="text-slate-400 text-xs max-w-xs mt-1">
                     The bottle photo and 10-second timer will appear as soon as the Game Master begins the round.
                   </p>
                 </div>
 
-                {/* Contestants Joined Box */}
+                {/* Contestants Joined Grid */}
                 <div className="w-full bg-slate-900/60 border border-slate-800 rounded-2xl p-4 text-left">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Contestants Joined ({Math.max(1, gameState.players.length)})
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                      👥 Contestants Joined ({Math.max(1, gameState.players.length)})
                     </span>
                     <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
                       Live Lobby
@@ -696,7 +631,6 @@
                   </div>
                   
                   <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                    {/* Always list current player first */}
                     <div className="bg-amber-500/10 border border-amber-500/30 px-3 py-2 rounded-xl text-xs font-bold text-amber-300 flex items-center gap-2 truncate">
                       <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center text-[10px] font-black shrink-0">1</span>
                       <span className="truncate">{playerName} (You)</span>
@@ -710,18 +644,12 @@
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 pt-4">
-                  <button
-                    onClick={() => setSoundMuted(!soundMuted)}
-                    className="px-3 py-1.5 rounded-lg border border-slate-800 text-xs text-slate-400 hover:text-white"
-                  >
-                    {soundMuted ? '🔇 Sound Off' : '🔊 Sound On'}
+                <div className="flex items-center gap-3 pt-2">
+                  <button onClick={() => setSoundMuted(!soundMuted)} className="p-2.5 rounded-full border border-slate-800 text-xs text-slate-400 hover:text-white">
+                    {soundMuted ? '🔇' : '🔊'}
                   </button>
-                  <button
-                    onClick={() => { setPlayerName(''); localStorage.removeItem('perfume_player_name'); }}
-                    className="px-3 py-1.5 rounded-lg border border-slate-800 text-xs text-slate-400 hover:text-white"
-                  >
-                    Change Nickname
+                  <button onClick={() => setRole('gm')} className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1 border border-slate-800 px-3 py-1.5 rounded-xl">
+                    🔑 Switch to Game Master
                   </button>
                 </div>
               </main>
@@ -729,38 +657,35 @@
           );
         }
 
-        // State B: ACTIVE GUESSING (10s countdown)
+        // 2. ACTIVE GUESSING
         if (gameState.status === 'guessing') {
           return (
-            <div className="min-h-screen flex flex-col bg-slate-950">
+            <div className="min-h-screen flex flex-col bg-[#0b0f17]">
               <ContestantHeader />
               <main className="flex-1 max-w-md w-full mx-auto p-4 flex flex-col space-y-4">
                 
-                {/* 10s Timer Banner */}
-                <div className="flex items-center justify-between bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl">
-                  <span className="text-xs font-bold text-slate-400 tracking-wider uppercase">Guess the Brand</span>
-                  <div className={`flex items-center gap-1 font-mono text-xl font-black ${timeLeft <= 3 ? 'text-red-500 animate-ping' : 'text-amber-400'}`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Guessing</span>
+                  <div className={`font-mono text-lg font-black ${timeLeft <= 3 ? 'text-rose-500 animate-ping' : 'text-amber-400'}`}>
                     ⏱ {timeLeft}s
                   </div>
                 </div>
 
-                {/* Guessing Photo (Close-Up) */}
-                <div className="aspect-square w-full bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-xl flex items-center justify-center p-2 relative">
+                <div className="aspect-square w-full bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-xl flex items-center justify-center p-3 relative">
                   {currentRound.guessImage ? (
-                    <img src={currentRound.guessImage} alt="Perfume Close-Up" className="w-full h-full object-contain rounded-xl" />
+                    <img src={currentRound.guessImage} alt="Guessing" className="w-full h-full object-contain rounded-xl" />
                   ) : (
-                    <div className="text-center text-slate-600 text-xs">Waiting for Photo...</div>
+                    <span className="text-slate-600 text-xs">Waiting for photo...</span>
                   )}
                 </div>
 
-                {/* Answer Submission Form */}
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
                   {!hasSubmitted ? (
                     <form onSubmit={handleSubmitGuess} className="space-y-3">
                       <input
                         type="text"
                         autoFocus
-                        placeholder="Type perfume brand (e.g. Prada)..."
+                        placeholder="Type perfume brand..."
                         value={contestantGuess}
                         onChange={(e) => setContestantGuess(e.target.value)}
                         className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-bold text-center placeholder-slate-500 focus:outline-none focus:border-amber-500"
@@ -773,10 +698,11 @@
                       </button>
                     </form>
                   ) : (
-                    <div className="py-4 text-center space-y-1">
-                      <span className="text-emerald-400 font-black text-lg">✓ Answer Locked In!</span>
-                      <p className="text-slate-400 text-xs">"{contestantGuess}"</p>
-                      <p className="text-[11px] text-slate-500 pt-1">Results will unlock when the timer expires.</p>
+                    <div className="py-3 text-center space-y-1">
+                      <div className="text-amber-400 font-black text-sm flex items-center justify-center gap-1.5">
+                        <span className="text-emerald-400">✓</span> Answer Locked In: "{contestantGuess}"
+                      </div>
+                      <p className="text-[11px] text-slate-500">Scoring will unlock when GM reveals.</p>
                     </div>
                   )}
                 </div>
@@ -785,49 +711,47 @@
           );
         }
 
-        // State C: REVEALED ANSWER SCREEN
+        // 3. REVEALED ANSWER SCREEN (Strictly positioned below image)
         if (gameState.status === 'revealed') {
-          const myGuess = (myPlayerData.currentGuess || contestantGuess || 'No answer submitted').trim();
+          const myGuess = (myPlayerData.currentGuess || contestantGuess || '(None)').trim();
           const isWinner = myPlayerData.isCorrect;
 
           return (
-            <div className="min-h-screen flex flex-col bg-slate-950">
+            <div className="min-h-screen flex flex-col bg-[#0b0f17]">
               <ContestantHeader />
               <main className="flex-1 max-w-md w-full mx-auto p-4 flex flex-col space-y-4">
                 
-                {/* Reveal Badge Header */}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Item #{gameState.roundIndex + 1} Result</span>
-                  <span className="bg-amber-500/20 border border-amber-500/40 text-amber-300 px-2.5 py-0.5 rounded-full text-xs font-bold">
+                <div className="flex justify-end">
+                  <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1 rounded-full text-xs font-bold">
                     Revealed
                   </span>
                 </div>
 
-                {/* Full Reveal Bottle Photo */}
-                <div className="aspect-square w-full bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-xl flex items-center justify-center p-2 relative">
+                <div className="aspect-square w-full bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-xl flex items-center justify-center p-3">
                   {currentRound.revealImage || currentRound.guessImage ? (
-                    <img src={currentRound.revealImage || currentRound.guessImage} alt="Full Bottle" className="w-full h-full object-contain rounded-xl" />
+                    <img src={currentRound.revealImage || currentRound.guessImage} alt="Reveal" className="w-full h-full object-contain rounded-xl" />
                   ) : (
-                    <div className="text-center text-slate-600 text-xs">Photo Revealed</div>
+                    <span className="text-slate-600 text-xs">Photo Revealed</span>
                   )}
                 </div>
 
-                {/* Official Answer Box (Positioned STRICTLY BELOW Photo) */}
+                {/* Official Answer Card strictly below */}
                 <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-4 shadow-xl space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-amber-400">Official Brand Answer</span>
-                    <span className={`text-xs font-black px-2 py-0.5 rounded ${isWinner ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
-                      {isWinner ? '+1 Point!' : '+0 Pts'}
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                      👑 OFFICIAL ANSWER
+                    </span>
+                    <span className={`text-xs font-black px-2 py-0.5 rounded ${isWinner ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>
+                      {isWinner ? '+1 Pt' : '+0 Pts'}
                     </span>
                   </div>
 
                   <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
-                    <div className="text-lg font-black text-white">
-                      {currentRound.option1}
-                      {currentRound.option2 && currentRound.option2 !== 'N/A' && currentRound.option2 !== 'na' && (
-                        <span className="text-slate-400 text-sm font-normal ml-2">or {currentRound.option2}</span>
-                      )}
-                    </div>
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold">ACCEPTED BRAND:</span>
+                    <span className="text-amber-400 font-black text-base">{currentRound.option1}</span>
+                    {currentRound.option2 && currentRound.option2 !== 'N/A' && currentRound.option2 !== 'na' && (
+                      <span className="text-slate-400 text-sm font-normal ml-1">or <strong className="text-slate-200">{currentRound.option2}</strong></span>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between text-xs px-1 text-slate-400">
@@ -838,46 +762,14 @@
                   </div>
                 </div>
 
-                <div className="text-center text-xs text-slate-500 pt-2 animate-pulse">
-                  Waiting for Game Master to advance to next item...
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button onClick={() => setSoundMuted(!soundMuted)} className="p-2 rounded-full border border-slate-800 text-xs text-slate-400 hover:text-white">
+                    {soundMuted ? '🔇' : '🔊'}
+                  </button>
+                  <button onClick={() => setRole('gm')} className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1 border border-slate-800 px-3 py-1.5 rounded-xl">
+                    🔑 Switch to Game Master
+                  </button>
                 </div>
-              </main>
-            </div>
-          );
-        }
-
-        // State D: END OF GAME PODIUM
-        if (gameState.status === 'ended') {
-          const podium = [...gameState.players].sort((a,b) => b.score - a.score);
-          return (
-            <div className="min-h-screen flex flex-col bg-slate-950 p-4">
-              <ContestantHeader />
-              <main className="flex-1 max-w-md w-full mx-auto py-8 flex flex-col items-center justify-center text-center space-y-6">
-                <OfficialLogo className="h-16" />
-                <h2 className="text-3xl font-black text-amber-400">Game Over!</h2>
-                
-                <div className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-3">
-                  <h3 className="text-xs uppercase font-bold text-slate-400 tracking-wider mb-2">Final Leaderboard</h3>
-                  {podium.slice(0, 5).map((p, idx) => (
-                    <div key={idx} className={`flex items-center justify-between p-3 rounded-xl border ${idx === 0 ? 'bg-amber-500/10 border-amber-500/40 text-amber-300 font-black' : 'bg-slate-950 border-slate-800 text-slate-300'}`}>
-                      <span className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-slate-800 text-xs flex items-center justify-center font-bold">#{idx + 1}</span>
-                        <span>{p.name}</span>
-                      </span>
-                      <span className="font-mono">{p.score} pts</span>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  onClick={() => {
-                    localStorage.removeItem('perfume_player_name');
-                    setPlayerName('');
-                  }}
-                  className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition"
-                >
-                  🏠 Back to Home Page
-                </button>
               </main>
             </div>
           );
@@ -887,21 +779,21 @@
       // --- GAME MASTER PASSCODE SCREEN ---
       if (role === 'gm' && !gmAuthenticated) {
         return (
-          <div className="min-h-screen flex items-center justify-center p-4 bg-slate-950">
+          <div className="min-h-screen flex items-center justify-center p-4 bg-[#0b0f17]">
             <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-center space-y-6">
               <div className="flex justify-center">
-                <OfficialLogo className="h-14" />
+                <OfficialLogo className="h-12" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white tracking-tight">Game Master Access</h1>
-                <p className="text-slate-400 text-xs mt-1">Enter host passcode to access dashboard</p>
+                <h1 className="text-lg font-bold text-white tracking-tight">Game Master Access</h1>
+                <p className="text-slate-400 text-xs mt-1">Enter host passcode</p>
               </div>
               <form onSubmit={(e) => {
                 e.preventDefault();
                 if (gmPasscode === '0000') {
                   setGmAuthenticated(true);
                 } else {
-                  alert('Incorrect Passcode! Default is 0000');
+                  alert('Incorrect Passcode! (Default is 0000)');
                 }
               }} className="space-y-4">
                 <input
@@ -915,14 +807,11 @@
                   type="submit"
                   className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black rounded-xl shadow-lg transition"
                 >
-                  Unlock Dashboard ➔
+                  Unlock Access ➔
                 </button>
               </form>
               <div className="pt-2">
-                <button
-                  onClick={() => setRole('contestant')}
-                  className="text-xs text-slate-500 hover:text-slate-300 underline"
-                >
+                <button onClick={() => setRole('contestant')} className="text-xs text-slate-500 hover:text-slate-300 underline">
                   Switch to Contestant View
                 </button>
               </div>
@@ -933,269 +822,331 @@
 
       // --- GAME MASTER DASHBOARD VIEW ---
       return (
-        <div className="min-h-screen flex flex-col bg-slate-950">
+        <div className="min-h-screen flex flex-col bg-[#0b0f17]">
           
-          {/* Top Navigation */}
-          <header className="px-6 py-3.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between sticky top-0 z-30">
-            <div className="flex items-center gap-4">
+          {/* Top Bar Navigation */}
+          <header className="px-6 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between sticky top-0 z-30">
+            <div className="flex items-center gap-3">
               <OfficialLogo className="h-8" />
-              <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 p-1 rounded-xl">
+              
+              <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 p-1 rounded-xl ml-2">
                 <button
                   onClick={() => setActiveTab('arena')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${activeTab === 'arena' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${activeTab === 'arena' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
                 >
-                  🎮 Game Arena
+                  🎮 Proceed to Game Arena
                 </button>
                 <button
                   onClick={() => setActiveTab('items')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${activeTab === 'items' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${activeTab === 'items' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
                 >
-                  📋 Perfume Items ({rounds.length})
+                  👑 Perfume Items ({rounds.length})
                 </button>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl text-xs font-mono text-slate-400">
-                <span className={`w-2 h-2 rounded-full ${netStatus === 'live' ? 'bg-emerald-400' : 'bg-amber-400 animate-ping'}`} />
-                <span>{roomCode}</span>
-              </div>
-
-              {/* Force Reset Lobby Button */}
               <button
-                onClick={handleForceResetLobby}
-                title="Force all contestants back to Waiting Lobby"
+                onClick={() => setShowShareModal(true)}
                 className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
               >
-                🔄 Reset Lobby
+                🔗 Share
               </button>
 
-              {/* Restart Game */}
+              {gameState.status === 'waiting' && (
+                <button
+                  onClick={handleStartTimer}
+                  className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black shadow transition flex items-center gap-1"
+                >
+                  ▶ Start (10s)
+                </button>
+              )}
+
+              {gameState.status === 'guessing' && (
+                <button
+                  onClick={handleRevealAnswer}
+                  className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-black shadow transition flex items-center gap-1"
+                >
+                  👁 Reveal Answer
+                </button>
+              )}
+
+              {gameState.status === 'revealed' && (
+                <button
+                  onClick={handleNextRound}
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black shadow transition"
+                >
+                  Next Perfume ➔
+                </button>
+              )}
+
               <button
                 onClick={handleRestartGame}
-                title="Clear all scores and send contestants home"
-                className="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900 border border-rose-800/80 text-rose-300 rounded-xl text-xs font-bold transition"
+                className="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 rounded-xl text-xs font-bold transition"
               >
-                🔄 Restart Game
-              </button>
-
-              {/* Mute */}
-              <button
-                onClick={() => setSoundMuted(!soundMuted)}
-                className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300 text-sm"
-              >
-                {soundMuted ? '🔇' : '🔊'}
+                End Game
               </button>
             </div>
           </header>
 
-          {/* TAB 1: GAME ARENA */}
+          {/* TAB 1: ARENA */}
           {activeTab === 'arena' && (
             <main className="flex-1 max-w-5xl w-full mx-auto p-6 space-y-6">
               
-              {/* Controls Header Card */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <span className="text-xs font-bold text-amber-500 uppercase tracking-widest">Active Round #{gameState.roundIndex + 1} of {rounds.length}</span>
-                  <h2 className="text-2xl font-black text-white">{currentRound.name}</h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Accepted: <strong className="text-slate-200">{currentRound.option1}</strong> {currentRound.option2 && currentRound.option2 !== 'N/A' && `or ${currentRound.option2}`}
-                  </p>
+              {/* Leader & Timer Strip */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 text-lg">
+                    👑
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold block">CURRENT LEADER</span>
+                    <span className="text-sm font-bold text-slate-300">
+                      {gameState.players.length > 0 && gameState.players.some(p => p.score > 0)
+                        ? `${[...gameState.players].sort((a,b)=>b.score-a.score)[0].name} (${[...gameState.players].sort((a,b)=>b.score-a.score)[0].score} pts)`
+                        : 'No points recorded yet'}
+                    </span>
+                  </div>
                 </div>
 
-                {/* Primary Action Buttons */}
                 <div className="flex items-center gap-2">
-                  {gameState.status === 'waiting' && (
-                    <button
-                      onClick={handleStartTimer}
-                      className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black rounded-xl shadow-lg shadow-amber-500/20 active:scale-95 transition"
-                    >
-                      ▶ Start Round (10s)
-                    </button>
-                  )}
-
-                  {gameState.status === 'guessing' && (
-                    <button
-                      onClick={handleRevealAnswer}
-                      className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl shadow-lg active:scale-95 transition"
-                    >
-                      👁 Reveal Answer ({timeLeft}s)
-                    </button>
-                  )}
-
-                  {gameState.status === 'revealed' && (
-                    <button
-                      onClick={handleNextRound}
-                      className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl shadow-lg active:scale-95 transition"
-                    >
-                      Next Perfume ➔
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Photos Comparison Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* 1. Guessing Photo */}
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">1. Guessing Photo (Close-Up)</span>
-                    <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">Contestant View</span>
+                  <div className="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl text-xs font-mono text-amber-400 font-bold">
+                    ⏱ Timer: {gameState.status === 'guessing' ? `${timeLeft}s` : '10s'}
                   </div>
-                  <div className="aspect-square bg-slate-950 rounded-xl overflow-hidden border border-slate-800/80 flex items-center justify-center p-2">
-                    {currentRound.guessImage ? (
-                      <img src={currentRound.guessImage} alt="Close up" className="w-full h-full object-contain rounded-lg" />
-                    ) : (
-                      <span className="text-slate-600 text-xs">No image provided</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* 2. Reveal Photo */}
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">2. Full Reveal Photo</span>
-                    <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-mono">Revealed View</span>
-                  </div>
-                  <div className="aspect-square bg-slate-950 rounded-xl overflow-hidden border border-slate-800/80 flex items-center justify-center p-2">
-                    {currentRound.revealImage || currentRound.guessImage ? (
-                      <img src={currentRound.revealImage || currentRound.guessImage} alt="Reveal" className="w-full h-full object-contain rounded-lg" />
-                    ) : (
-                      <span className="text-slate-600 text-xs">No image provided</span>
-                    )}
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Live Contestants Table & Scoring */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">
-                    Live Contestants & Answers ({gameState.players.length})
-                  </h3>
                   <button
                     onClick={() => {
                       const testBot = { id: `bot_${Date.now()}`, name: `Player ${gameState.players.length + 1}` };
                       setGameState(prev => {
-                        const updated = { ...prev, players: [...prev.players, { ...testBot, score: 0, currentGuess: 'Prada', isCorrect: null }] };
+                        const updated = { ...prev, players: [...prev.players, { ...testBot, score: 0, currentGuess: 'Rabanne', isCorrect: null }] };
                         broadcastState(updated);
                         return updated;
                       });
                     }}
-                    className="text-xs text-slate-400 hover:text-white border border-slate-700 px-2.5 py-1 rounded-lg"
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold"
                   >
-                    + Add Test Bot
+                    + Test Bot
                   </button>
-                </div>
-
-                {gameState.players.length === 0 ? (
-                  <div className="py-8 text-center text-slate-500 text-xs">
-                    No contestants connected yet. Ask players to scan your QR code or open link with <code className="text-amber-400">?role=contestant</code>.
+                  <div className="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400">
+                    👥 {gameState.players.length} Players
                   </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-800 text-slate-400 uppercase">
-                          <th className="py-2 px-3">Rank / Player</th>
-                          <th className="py-2 px-3">Submitted Guess</th>
-                          <th className="py-2 px-3">Result</th>
-                          <th className="py-2 px-3">Total Score</th>
-                          <th className="py-2 px-3 text-right">Manual Adjust</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/60 font-medium">
-                        {gameState.players.map((p, idx) => (
-                          <tr key={idx} className="hover:bg-slate-800/30">
-                            <td className="py-2.5 px-3 text-white font-bold flex items-center gap-2">
-                              <span className="w-5 h-5 rounded-full bg-slate-800 text-[10px] flex items-center justify-center font-mono">#{idx + 1}</span>
-                              {p.name}
-                            </td>
-                            <td className="py-2.5 px-3 font-mono text-slate-300">
-                              {p.currentGuess ? `"${p.currentGuess}"` : <span className="text-slate-600 italic">Thinking...</span>}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              {p.isCorrect === true && <span className="text-emerald-400 font-bold">✓ Correct (+1)</span>}
-                              {p.isCorrect === false && <span className="text-rose-400 font-bold">✗ Incorrect</span>}
-                              {p.isCorrect === null && <span className="text-slate-500">—</span>}
-                            </td>
-                            <td className="py-2.5 px-3 font-mono text-amber-400 font-bold text-sm">
-                              {p.score} pts
-                            </td>
-                            <td className="py-2.5 px-3 text-right space-x-1">
-                              <button
-                                onClick={() => handleScoreAdjust(p.name, 1)}
-                                className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded"
-                              >
-                                +1
-                              </button>
-                              <button
-                                onClick={() => handleScoreAdjust(p.name, -1)}
-                                className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded"
-                              >
-                                -1
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </main>
-          )}
-
-          {/* TAB 2: PERFUME ITEMS MANAGER */}
-          {activeTab === 'items' && (
-            <main className="flex-1 max-w-5xl w-full mx-auto p-6 space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-black text-white">Perfume Items Inventory</h2>
-                  <p className="text-slate-400 text-xs">Configure fragrances, accepted alternative brand answers, and bottle photos.</p>
                 </div>
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs shadow-lg transition"
-                >
-                  + Add New Perfume
-                </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {rounds.map((item, idx) => (
-                  <div key={item.id || idx} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 relative">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Item #{idx + 1}</span>
-                      <button
-                        onClick={() => {
-                          if (rounds.length <= 1) return alert("Must keep at least 1 item!");
-                          const updated = rounds.filter((_, i) => i !== idx);
-                          setRounds(updated);
-                          localStorage.setItem('perfume_custom_rounds', JSON.stringify(updated));
-                        }}
-                        className="text-xs text-rose-400 hover:text-rose-300"
-                      >
-                        Delete
-                      </button>
+              {/* Active Round Card */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs px-2.5 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                      ACTIVE ROUND: ITEM #{gameState.roundIndex + 1}
+                    </span>
+                    <span className="bg-emerald-500/20 text-emerald-300 text-xs px-2 py-0.5 rounded font-semibold">
+                      1 Point per Guess
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-400 text-xs font-mono">
+                    <button onClick={() => setGameState(prev => ({ ...prev, roundIndex: Math.max(0, prev.roundIndex - 1), status: 'waiting' }))} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded">‹</button>
+                    <span>{gameState.roundIndex + 1} / {rounds.length}</span>
+                    <button onClick={() => setGameState(prev => ({ ...prev, roundIndex: Math.min(rounds.length - 1, prev.roundIndex + 1), status: 'waiting' }))} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded">›</button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Option 1 (Primary Answer)</span>
+                    <span className="text-white font-black text-base">{currentRound.option1}</span>
+                  </div>
+                  <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl">
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Option 2 (Alternative / Optional Answer)</span>
+                    <span className="text-amber-400 font-black text-base">{currentRound.option2 || 'N/A'}</span>
+                  </div>
+                </div>
+
+                {/* Side-by-Side Photos */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs text-slate-400">
+                      <span>1. Guessing Photo (Close-Up)</span>
+                      <span className="font-mono text-[10px]">1:1 Square</span>
                     </div>
-
-                    <div className="aspect-video bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center p-2 border border-slate-800">
-                      {item.guessImage ? (
-                        <img src={item.guessImage} alt={item.name} className="w-full h-full object-contain" />
+                    <div className="aspect-square bg-slate-950 border border-slate-800 rounded-xl overflow-hidden flex items-center justify-center p-2">
+                      {currentRound.guessImage ? (
+                        <img src={currentRound.guessImage} alt="Guess" className="w-full h-full object-contain" />
                       ) : (
                         <span className="text-slate-600 text-xs">No image</span>
                       )}
                     </div>
+                    <label className="block w-full text-center py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-300 cursor-pointer">
+                      Upload Guessing Photo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              const updated = rounds.map((r, i) => i === gameState.roundIndex ? { ...r, guessImage: reader.result } : r);
+                              setRounds(updated);
+                              localStorage.setItem('perfume_custom_rounds', JSON.stringify(updated));
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
 
-                    <div>
-                      <h4 className="font-bold text-sm text-white">{item.name}</h4>
-                      <p className="text-xs text-slate-400">Option 1: <strong className="text-slate-200">{item.option1}</strong></p>
-                      {item.option2 && item.option2 !== 'N/A' && (
-                        <p className="text-xs text-slate-400">Option 2: <strong className="text-slate-200">{item.option2}</strong></p>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs text-slate-400">
+                      <span>2. Reveal Photo (Full Bottle)</span>
+                      <span className="font-mono text-[10px]">1:1 or 4:5</span>
+                    </div>
+                    <div className="aspect-square bg-slate-950 border border-slate-800 rounded-xl overflow-hidden flex items-center justify-center p-2">
+                      {currentRound.revealImage || currentRound.guessImage ? (
+                        <img src={currentRound.revealImage || currentRound.guessImage} alt="Reveal" className="w-full h-full object-contain" />
+                      ) : (
+                        <span className="text-slate-600 text-xs">No image</span>
                       )}
+                    </div>
+                    <label className="block w-full text-center py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-300 cursor-pointer">
+                      Upload Reveal Photo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              const updated = rounds.map((r, i) => i === gameState.roundIndex ? { ...r, revealImage: reader.result } : r);
+                              setRounds(updated);
+                              localStorage.setItem('perfume_custom_rounds', JSON.stringify(updated));
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contestants Table */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    👥 Live Contestants & Automatic Scoring ({gameState.players.length})
+                  </h3>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-500 uppercase">
+                        <th className="py-2 px-3">CONTESTANT</th>
+                        <th className="py-2 px-3">THEIR GUESS</th>
+                        <th className="py-2 px-3">AUTO RESULT</th>
+                        <th className="py-2 px-3">TOTAL SCORE</th>
+                        <th className="py-2 px-3 text-right">ADJUST</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-medium">
+                      {gameState.players.map((p, idx) => (
+                        <tr key={idx} className="hover:bg-slate-800/30">
+                          <td className="py-2.5 px-3 text-white font-bold">#{idx + 1} {p.name}</td>
+                          <td className="py-2.5 px-3 text-slate-300 italic">{p.currentGuess ? `"${p.currentGuess}"` : 'Awaiting...'}</td>
+                          <td className="py-2.5 px-3">
+                            {p.isCorrect === true && <span className="text-emerald-400 font-bold">✓ Correct</span>}
+                            {p.isCorrect === false && <span className="text-rose-400 font-bold">✗ Incorrect</span>}
+                            {p.isCorrect === null && <span className="text-slate-600">—</span>}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono text-amber-400 font-bold text-sm">{p.score} pts</td>
+                          <td className="py-2.5 px-3 text-right space-x-1">
+                            <button onClick={() => handleScoreAdjust(p.name, 1)} className="px-2 py-0.5 bg-slate-800 text-emerald-400 rounded hover:bg-slate-700">+1</button>
+                            <button onClick={() => handleScoreAdjust(p.name, -1)} className="px-2 py-0.5 bg-slate-800 text-rose-400 rounded hover:bg-slate-700">-1</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </main>
+          )}
+
+          {/* TAB 2: PERFUME ITEMS INVENTORY */}
+          {activeTab === 'items' && (
+            <main className="flex-1 max-w-5xl w-full mx-auto p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-white">Perfume Items Inventory ({rounds.length})</h2>
+                  <p className="text-slate-400 text-xs">Configure accepted answers and photos for each round.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    const newItem = {
+                      id: `item-${Date.now()}`,
+                      name: `New Perfume #${rounds.length + 1}`,
+                      option1: "Brand Name",
+                      option2: "Alternative",
+                      guessImage: "",
+                      revealImage: ""
+                    };
+                    const updated = [...rounds, newItem];
+                    setRounds(updated);
+                    localStorage.setItem('perfume_custom_rounds', JSON.stringify(updated));
+                  }}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs shadow"
+                >
+                  + Add Item
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {rounds.map((item, idx) => (
+                  <div key={item.id || idx} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-400 uppercase">Item #{idx + 1}</span>
+                      {rounds.length > 1 && (
+                        <button
+                          onClick={() => {
+                            const updated = rounds.filter((_, i) => i !== idx);
+                            setRounds(updated);
+                            localStorage.setItem('perfume_custom_rounds', JSON.stringify(updated));
+                          }}
+                          className="text-xs text-rose-400 hover:text-rose-300"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={item.option1}
+                        onChange={(e) => {
+                          const updated = rounds.map((r, i) => i === idx ? { ...r, option1: e.target.value } : r);
+                          setRounds(updated);
+                          localStorage.setItem('perfume_custom_rounds', JSON.stringify(updated));
+                        }}
+                        placeholder="Option 1 (Primary Brand)"
+                        className="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs font-bold"
+                      />
+                      <input
+                        type="text"
+                        value={item.option2}
+                        onChange={(e) => {
+                          const updated = rounds.map((r, i) => i === idx ? { ...r, option2: e.target.value } : r);
+                          setRounds(updated);
+                          localStorage.setItem('perfume_custom_rounds', JSON.stringify(updated));
+                        }}
+                        placeholder="Option 2 (Alternative / Optional)"
+                        className="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-amber-400 text-xs font-bold"
+                      />
                     </div>
                   </div>
                 ))}
@@ -1203,99 +1154,36 @@
             </main>
           )}
 
-          {/* ADD ITEM MODAL */}
-          {showAddModal && (
+          {/* SHARE MODAL */}
+          {showShareModal && (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                  <h3 className="font-bold text-white">Add New Perfume Item</h3>
-                  <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">✕</button>
+              <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                  <h3 className="text-sm font-bold text-white">Invite Contestants</h3>
+                  <button onClick={() => setShowShareModal(false)} className="text-slate-400 hover:text-white">✕</button>
                 </div>
-
-                <div className="space-y-3 text-xs">
-                  <div>
-                    <label className="text-slate-400 font-bold block mb-1">Perfume Name (Internal Title)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Dior Sauvage"
-                      value={newItem.name}
-                      onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white font-medium focus:border-amber-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-slate-400 font-bold block mb-1">Answer Option 1 (Primary Brand)*</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Dior"
-                      value={newItem.option1}
-                      onChange={(e) => setNewItem({ ...newItem, option1: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white font-medium focus:border-amber-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-slate-400 font-bold block mb-1">Answer Option 2 (Alternative / Optional)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Christian Dior (or leave blank / N/A)"
-                      value={newItem.option2}
-                      onChange={(e) => setNewItem({ ...newItem, option2: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white font-medium focus:border-amber-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-slate-400 font-bold block mb-1">Close-Up Guessing Image URL or File</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = () => setNewItem(prev => ({ ...prev, guessImage: reader.result }));
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      className="block w-full text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-slate-800 file:text-xs file:font-bold file:text-amber-400 mb-1"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Or paste image URL (https://...)"
-                      value={newItem.guessImage}
-                      onChange={(e) => setNewItem({ ...newItem, guessImage: e.target.value })}
-                      className="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono text-[11px]"
-                    />
-                  </div>
+                <div className="bg-white p-3 rounded-xl inline-block mx-auto">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(window.location.origin + window.location.pathname + '?role=contestant')}`}
+                    alt="Contestant QR Code"
+                    className="w-40 h-40"
+                  />
                 </div>
-
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
-                  <button
-                    onClick={() => setShowAddModal(false)}
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!newItem.option1) return alert("Option 1 (Brand) is required!");
-                      const updated = [...rounds, {
-                        ...newItem,
-                        id: `item_${Date.now()}`,
-                        name: newItem.name || newItem.option1
-                      }];
-                      setRounds(updated);
-                      localStorage.setItem('perfume_custom_rounds', JSON.stringify(updated));
-                      setShowAddModal(false);
-                      setNewItem({ name: '', option1: '', option2: '', guessImage: '', revealImage: '' });
-                    }}
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black shadow"
-                  >
-                    Save Perfume
-                  </button>
-                </div>
+                <input
+                  type="text"
+                  readOnly
+                  value={`${window.location.origin + window.location.pathname}?role=contestant`}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 text-xs font-mono text-center"
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin + window.location.pathname}?role=contestant`);
+                    alert('Copied link to clipboard!');
+                  }}
+                  className="w-full py-2 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-amber-400"
+                >
+                  Copy Link
+                </button>
               </div>
             </div>
           )}
@@ -1304,7 +1192,6 @@
       );
     }
 
-    // Mount React App
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
