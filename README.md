@@ -11,6 +11,11 @@ Laptop = Game Master. Phones = players (join by QR / share link).
 ## Hosting on tiiny.host
 Upload a zip with `index.html`, `config.js` and `Logo Game.png`.
 
+## Perfume items (shared across laptops)
+Items and photos live in `game-items.dat` in this repo. Any laptop that opens the game as Game Master loads them.
+To change items: edit them in the game (Perfume Items tab) > click **Download items file** > upload `game-items.dat` here (replace the old one).
+The file is lightly scrambled so answers aren't readable at a glance. It is not real security: the repo is public.
+
 ## Sync
 Uses Supabase Realtime (free tier: 200 connections, 100 messages/sec).
 Without keys in `config.js` the game runs in offline demo mode (tabs on one computer only).

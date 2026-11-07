@@ -287,6 +287,32 @@
       );
     }
 
+    // --- Shared items file (game-items.dat in the repo) ---
+    // Light scrambling only, so answers aren't readable at a glance. Not real security.
+    const ITEMS_FILE = 'game-items.dat';
+    const ITEMS_KEY = 'gm-perfume-2026';
+    function hashText(str) {
+      let h = 5381;
+      for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+      return (h >>> 0).toString(36) + ':' + str.length;
+    }
+    function encodeItems(rounds) {
+      const json = JSON.stringify({ format: 'gm-items', version: 1, exportedAt: new Date().toISOString(), rounds });
+      const bytes = new TextEncoder().encode(json);
+      let bin = '';
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i] ^ ITEMS_KEY.charCodeAt(i % ITEMS_KEY.length));
+      return 'GMv1:' + btoa(bin);
+    }
+    function decodeItems(text) {
+      if (!text || !text.startsWith('GMv1:')) throw new Error('Not a game items file');
+      const bin = atob(text.slice(5).trim());
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i) ^ ITEMS_KEY.charCodeAt(i % ITEMS_KEY.length);
+      const data = JSON.parse(new TextDecoder().decode(bytes));
+      if (!data || !Array.isArray(data.rounds)) throw new Error('No items in file');
+      return data;
+    }
+
     // --- Realtime config (set in config.js) ---
     const GAME_CFG = window.GAME_CONFIG || {};
     const SB_ON = !!(GAME_CFG.supabaseUrl && GAME_CFG.supabaseKey && window.supabase && !/PASTE/i.test(GAME_CFG.supabaseUrl + GAME_CFG.supabaseKey));
@@ -418,6 +444,72 @@
       const roomKey = roomCode.toLowerCase().replace(/[^a-z0-9_-]/g, '');
       const roundsRef = useRef(rounds);
       roundsRef.current = rounds;
+
+      // Shared items file: lets any laptop host with the same items + photos
+      const [itemsFile, setItemsFile] = useState({ status: 'loading', hash: null, rounds: null, exportedAt: null });
+      // Checked before anything is saved, so a brand-new laptop counts as "no local items"
+      const hadLocalItemsRef = useRef((() => {
+        try {
+          const stored = JSON.parse(localStorage.getItem('gm_rounds_store') || 'null');
+          if (!Array.isArray(stored)) return false;
+          const onlyDemo = stored.every(r => /^round_[123]$/.test(r.id) && (r.createdAt || 0) <= 1003);
+          return !onlyDemo; // the 3 demo items don't count as real work
+        } catch (e) { return false; }
+      })());
+      const [itemsMsg, setItemsMsg] = useState('');
+      const localItemsHash = hashText(JSON.stringify(rounds));
+      const applyItems = (newRounds, hash) => {
+        setRounds(newRounds);
+        try { localStorage.setItem('gm_rounds_synced_hash', hash); } catch (e) {}
+        setGameState(prev => ({
+          ...prev,
+          activeRound: newRounds.find(r => r.id === prev.activeRound?.id) || newRounds[0] || null
+        }));
+      };
+      useEffect(() => {
+        let isPhone = false;
+        try { isPhone = new URLSearchParams(window.location.search).get('role') === 'contestant'; } catch (e) {}
+        if (isPhone) return; // phones get photos from the Game Master, never the file
+        fetch(ITEMS_FILE + '?t=' + Date.now(), { cache: 'no-store' })
+          .then(res => res.ok ? res.text() : Promise.reject(new Error('missing')))
+          .then(text => {
+            const data = decodeItems(text);
+            const fileHash = hashText(JSON.stringify(data.rounds));
+            setItemsFile({ status: 'ok', hash: fileHash, rounds: data.rounds, exportedAt: data.exportedAt });
+            const hasLocal = hadLocalItemsRef.current;
+            let syncedHash = null;
+            try { syncedHash = localStorage.getItem('gm_rounds_synced_hash'); } catch (e) {}
+            const localHash = hashText(JSON.stringify(roundsRef.current));
+            if (localHash === fileHash) {
+              try { localStorage.setItem('gm_rounds_synced_hash', fileHash); } catch (e) {}
+            } else if (!hasLocal || localHash === syncedHash) {
+              applyItems(data.rounds, fileHash); // nothing unsaved on this laptop: use the game file
+            }
+            // else: this laptop has its own unsaved changes. Keep them and show a choice in Perfume Items.
+          })
+          .catch(() => setItemsFile({ status: 'none', hash: null, rounds: null, exportedAt: null }));
+      }, []);
+
+      const downloadItemsFile = () => {
+        try {
+          const blob = new Blob([encodeItems(rounds)], { type: 'application/octet-stream' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = ITEMS_FILE;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+          try { localStorage.setItem('gm_rounds_synced_hash', localItemsHash); } catch (e) {}
+          setItemsMsg('Downloaded ' + ITEMS_FILE + '. Upload it to the GitHub repo (replace the old one) so every laptop gets these items.');
+        } catch (e) {
+          setItemsMsg('Download failed: ' + e.message);
+        }
+      };
+      const loadItemsFromFile = () => {
+        if (!itemsFile.rounds) return;
+        if (!window.confirm('Replace the items on this laptop with the items from the game file?')) return;
+        applyItems(itemsFile.rounds, itemsFile.hash);
+        setItemsMsg('Loaded ' + itemsFile.rounds.length + ' items from the game file.');
+      };
       const roundInfo = (gs) => {
         const idx = roundsRef.current.findIndex(r => r.id === gs.activeRound?.id);
         return { roundNumber: idx >= 0 ? idx + 1 : 0, totalRounds: roundsRef.current.length, roundsPlayed: gs.roundsPlayed || 0 };
@@ -1400,6 +1492,42 @@
                       <Icon name="plus" className="w-4 h-4" /> Add Item
                     </button>
                   </div>
+
+                  {/* Shared items file status */}
+                  {(() => {
+                    const inFile = itemsFile.status === 'ok' && itemsFile.hash === localItemsHash;
+                    return (
+                      <div className={`p-4 rounded-2xl border text-xs space-y-3 ${inFile ? 'bg-emerald-950/40 border-emerald-800' : 'bg-amber-950/40 border-amber-700'}`}>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                            <p className={`font-bold text-sm ${inFile ? 'text-emerald-400' : 'text-amber-400'}`}>
+                              {inFile ? '✓ These items are saved in the game' : itemsFile.status === 'loading' ? 'Checking game file…' : '⚠ These items are only saved on this laptop'}
+                            </p>
+                            <p className="text-zinc-400 mt-1">
+                              {inFile
+                                ? 'Any laptop that opens the game as Game Master gets the same items and photos.'
+                                : itemsFile.status === 'ok'
+                                  ? 'The game file has different items (' + itemsFile.rounds.length + '). Download your items and upload the file to GitHub to share them, or load the game file items.'
+                                  : 'No game file yet. Download your items and upload the file to GitHub so other laptops get them.'}
+                            </p>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            {!inFile && (
+                              <button onClick={downloadItemsFile} className="bg-[#D4AF37] hover:bg-[#b5922c] text-zinc-950 font-bold px-3 py-2 rounded-xl">
+                                ⬇ Download items file
+                              </button>
+                            )}
+                            {!inFile && itemsFile.status === 'ok' && (
+                              <button onClick={loadItemsFromFile} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold px-3 py-2 rounded-xl border border-zinc-700">
+                                Use game file items
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {itemsMsg && <p className="text-zinc-300 bg-zinc-950/60 rounded-lg px-3 py-2">{itemsMsg}</p>}
+                      </div>
+                    );
+                  })()}
 
                   {gameState.activeRound && (
                     <div className="bg-gradient-to-r from-[#D4AF37]/20 via-zinc-900 to-zinc-900 border-2 border-[#D4AF37] p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
