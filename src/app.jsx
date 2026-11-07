@@ -416,6 +416,12 @@
       // ===== Realtime transport (Supabase Realtime; BroadcastChannel only as offline demo) =====
       // Master -> everyone: channel "gm-<room>". Phones -> master: channel "gm-<room>-in" (sent over HTTPS, phones never receive each other's messages).
       const roomKey = roomCode.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      const roundsRef = useRef(rounds);
+      roundsRef.current = rounds;
+      const roundInfo = (gs) => {
+        const idx = roundsRef.current.findIndex(r => r.id === gs.activeRound?.id);
+        return { roundNumber: idx >= 0 ? idx + 1 : 0, totalRounds: roundsRef.current.length, roundsPlayed: gs.roundsPlayed || 0 };
+      };
       const mainChRef = useRef(null);
       const inChRef = useRef(null);
       const inWsReadyRef = useRef(false);
@@ -494,7 +500,8 @@
         remainingSec: gs.status === 'guessing' ? Math.max(0, Math.ceil(((gs.timerEndTime || 0) - Date.now()) / 1000)) : 0,
         showLeaderboard: !!gs.showLeaderboard,
         customLogo: gs.customLogo || null,
-        activeRound: publicRound(gs.activeRound, gs.status)
+        activeRound: publicRound(gs.activeRound, gs.status),
+        ...roundInfo(gs)
       });
 
       // Coalesced sends from the master (keeps message volume low with many phones)
@@ -540,6 +547,8 @@
                 activeRound: round,
                 status: saved.status === 'guessing' ? 'locked' : (saved.status || 'waiting'),
                 timerDuration: saved.timerDuration || prev.timerDuration,
+                roundsPlayed: saved.roundsPlayed || 0,
+                lastStartedRoundId: saved.lastStartedRoundId || null,
                 timerEndTime: 0
               }));
             }
@@ -550,10 +559,10 @@
         if (role !== 'master' || !restoredRef.current) return;
         try {
           localStorage.setItem(`gm_master_session_${roomKey}`, JSON.stringify({
-            players, status: gameState.status, activeRoundId: gameState.activeRound?.id, timerDuration: gameState.timerDuration, savedAt: Date.now()
+            players, status: gameState.status, activeRoundId: gameState.activeRound?.id, timerDuration: gameState.timerDuration, roundsPlayed: gameState.roundsPlayed || 0, lastStartedRoundId: gameState.lastStartedRoundId || null, savedAt: Date.now()
           }));
         } catch (e) {}
-      }, [role, players, gameState.status, gameState.activeRound?.id, gameState.timerDuration]);
+      }, [role, players, gameState.status, gameState.activeRound?.id, gameState.timerDuration, gameState.roundsPlayed]);
       // Set initial round if needed
       useEffect(() => {
         if (roleRef.current !== 'contestant' && !gameState.activeRound && rounds.length > 0) {
@@ -745,7 +754,10 @@
             status: 'guessing',
             timerEndTime: Date.now() + sec * 1000,
             timerDuration: msgData.duration || 10,
-            activeRound: msgData.activeRound || prev.activeRound
+            activeRound: msgData.activeRound || prev.activeRound,
+            roundNumber: msgData.roundNumber || prev.roundNumber,
+            totalRounds: msgData.totalRounds || prev.totalRounds,
+            roundsPlayed: msgData.roundsPlayed || prev.roundsPlayed
           }));
           if (Array.isArray(msgData.players)) setPlayers(mergeWithMe(msgData.players));
           setMyGuessInput('');
@@ -784,7 +796,10 @@
                 timerDuration: st.timerDuration || 10,
                 activeRound: st.activeRound || prev.activeRound,
                 showLeaderboard: !!st.showLeaderboard,
-                customLogo: st.customLogo || prev.customLogo
+                customLogo: st.customLogo || prev.customLogo,
+                roundNumber: st.roundNumber || 0,
+                totalRounds: st.totalRounds || 0,
+                roundsPlayed: st.roundsPlayed || 0
               };
             });
           }
@@ -882,7 +897,14 @@
         setPlayers(clearedPlayers);
         playersRef.current = clearedPlayers;
 
-        const newState = { ...gameState, status: 'guessing', timerEndTime: endTime };
+        const isNewRound = gameState.lastStartedRoundId !== gameState.activeRound.id;
+        const newState = {
+          ...gameState,
+          status: 'guessing',
+          timerEndTime: endTime,
+          lastStartedRoundId: gameState.activeRound.id,
+          roundsPlayed: (gameState.roundsPlayed || 0) + (isNewRound ? 1 : 0)
+        };
         setGameState(newState);
         gameStateRef.current = newState;
 
@@ -892,6 +914,7 @@
           activeRound: publicRound(newState.activeRound, 'guessing'),
           duration: duration,
           remainingSec: duration,
+          ...roundInfo(newState),
           players: publicPlayers(clearedPlayers, 'guessing')
         });
       };
@@ -929,6 +952,8 @@
           ...gameState,
           status: 'waiting',
           timerEndTime: 0,
+          roundsPlayed: 0,
+          lastStartedRoundId: null,
           activeRound: rounds.length > 0 ? rounds[0] : null
         };
         setGameState(resetState);
@@ -1074,6 +1099,11 @@
       const myPlayer = role === 'contestant'
         ? { ...myRecord, currentGuess: myLocalGuess || myRecord.currentGuess || '', isCorrect: isRevealPhase(gameState.status) ? !!myRecord.isCorrect : false }
         : myRecord;
+
+      // Highest score first; equal scores share the same rank
+      const rankedPlayers = [...players]
+        .sort((a, b) => (b.score || 0) - (a.score || 0) || String(a.name || '').localeCompare(String(b.name || '')))
+        .map(p => ({ ...p, rank: 1 + players.filter(o => (o.score || 0) > (p.score || 0)).length }));
 
       const getAnonymousLeaderLabel = () => {
         if (topScore === 0 || leaders.length === 0) return '0 pts';
@@ -2029,24 +2059,28 @@
                     </div>
 
                     <div className="space-y-2 max-h-60 overflow-y-auto px-1">
-                      {players.map((p, idx) => (
-                        <div
-                          key={p.id}
-                          className={`p-3 rounded-xl border flex items-center justify-between ${
-                            idx === 0 ? 'bg-[#D4AF37]/20 border-[#D4AF37]' : 'bg-zinc-900 border-zinc-800'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ${
-                              idx === 0 ? 'bg-[#D4AF37] text-zinc-950' : 'bg-zinc-800 text-zinc-400'
-                            }`}>
-                              #{idx + 1}
-                            </span>
-                            <span className="text-sm font-semibold text-white">{p.name}</span>
+                      {rankedPlayers.map((p) => {
+                        const isTop = p.rank === 1 && (p.score || 0) > 0;
+                        const isMe = p.id === myPlayerId;
+                        return (
+                          <div
+                            key={p.id}
+                            className={`p-3 rounded-xl border flex items-center justify-between ${
+                              isTop ? 'bg-[#D4AF37]/20 border-[#D4AF37]' : 'bg-zinc-900 border-zinc-800'
+                            } ${isMe ? 'ring-1 ring-orange-500/60' : ''}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ${
+                                isTop ? 'bg-[#D4AF37] text-zinc-950' : 'bg-zinc-800 text-zinc-400'
+                              }`}>
+                                #{p.rank}
+                              </span>
+                              <span className="text-sm font-semibold text-white">{p.name}{isMe ? ' (You)' : ''}</span>
+                            </div>
+                            <span className="font-bold text-[#D4AF37] text-sm">{p.score || 0} pts</span>
                           </div>
-                          <span className="font-bold text-[#D4AF37] text-sm">{p.score || 0} pts</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     <button
@@ -2062,15 +2096,29 @@
                     <div className="space-y-4 w-full max-w-sm mx-auto">
                       <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-bold shadow-sm">
                         <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-                        <span>Waiting for Game Master to start...</span>
+                        <span>{(gameState.roundsPlayed || 0) > 0 ? 'Next question coming up...' : 'Waiting for Game Master to start...'}</span>
                       </div>
 
                       <div className="py-2">
                         <GameMasterLogo customLogoUrl={gameState.customLogo} className="h-20 mx-auto drop-shadow-xl" />
-                        <h2 className="text-lg font-serif text-white font-bold mt-2">Get Ready, {contestantName || 'Player'}!</h2>
-                        <p className="text-xs text-zinc-400 mt-1">
-                          The bottle photo and 10-second timer will appear as soon as the Game Master begins the round.
-                        </p>
+                        {(gameState.roundsPlayed || 0) > 0 ? (
+                          <>
+                            <h2 className="text-lg font-serif text-white font-bold mt-2">Get ready for the next question, {contestantName || 'Player'}!</h2>
+                            {gameState.roundNumber > 0 && gameState.totalRounds > 0 && (
+                              <p className="text-xs font-bold text-orange-400 mt-1">Question {gameState.roundNumber} of {gameState.totalRounds}</p>
+                            )}
+                            <p className="text-xs text-zinc-400 mt-1">
+                              Your score so far: <strong className="text-[#D4AF37]">{myPlayer.score || 0} pts</strong>. The next bottle and {gameState.timerDuration || 10}-second timer appear when the Game Master starts.
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <h2 className="text-lg font-serif text-white font-bold mt-2">Get Ready, {contestantName || 'Player'}!</h2>
+                            <p className="text-xs text-zinc-400 mt-1">
+                              The bottle photo and {gameState.timerDuration || 10}-second timer will appear as soon as the Game Master begins the round.
+                            </p>
+                          </>
+                        )}
                       </div>
 
                       {/* Live Contestants Joined */}
