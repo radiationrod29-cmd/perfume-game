@@ -577,10 +577,10 @@
       // What phones are allowed to see. Answers and reveal photo stay on the master until reveal.
       const isRevealPhase = (status) => status === 'revealed' || status === 'ended';
       // Scoring modes: 'all' = every correct answer 1 pt, 'fastest' = only the fastest correct 1 pt, 'top3' = fastest three correct 3/2/1 pts
-      const SCORING_LABELS = { all: 'Every correct answer = 1 pt', fastest: 'Fastest correct answer only = 1 pt', top3: 'Top 3 fastest correct = 3 / 2 / 1 pts' };
+      const SCORING_LABELS = { all: 'Every correct answer = 1 pt · ties ranked by fastest average time', fastest: 'Fastest correct answer only = 1 pt', top3: 'Top 3 fastest correct = 3 / 2 / 1 pts' };
       const publicPlayers = (list, status) => (list || []).map(p => isRevealPhase(status)
-        ? { id: p.id, name: p.name, score: p.score || 0, currentGuess: p.currentGuess || '', isCorrect: !!p.isCorrect, elapsedMs: p.elapsedMs ?? null, roundPoints: p.roundPoints || 0 }
-        : { id: p.id, name: p.name, score: Math.max(0, (p.score || 0) - (p.roundPoints || 0)), hasGuessed: !!p.currentGuess }); // this round's points stay hidden until reveal
+        ? { id: p.id, name: p.name, score: p.score || 0, currentGuess: p.currentGuess || '', isCorrect: !!p.isCorrect, elapsedMs: p.elapsedMs ?? null, roundPoints: p.roundPoints || 0, correctCount: p.correctCount || 0, correctTimeMs: p.correctTimeMs || 0 }
+        : { id: p.id, name: p.name, score: Math.max(0, (p.score || 0) - (p.roundPoints || 0)), hasGuessed: !!p.currentGuess, correctCount: p.correctCount || 0, correctTimeMs: p.correctTimeMs || 0 }); // this round's points stay hidden until reveal
       const publicRound = (r, status) => {
         if (!r) return null;
         if (isRevealPhase(status)) {
@@ -593,7 +593,7 @@
         timerDuration: gs.timerDuration || 10,
         remainingSec: gs.status === 'guessing' ? Math.max(0, Math.ceil(((gs.timerEndTime || 0) - Date.now()) / 1000)) : 0,
         remainingMs: gs.status === 'guessing' ? Math.max(0, (gs.timerEndTime || 0) - Date.now()) : 0,
-        scoringMode: gs.scoringMode || 'fastest',
+        scoringMode: gs.scoringMode || 'all',
         fastest: isRevealPhase(gs.status) ? (gs.fastest || null) : null,
         showLeaderboard: !!gs.showLeaderboard,
         customLogo: gs.customLogo || null,
@@ -645,7 +645,7 @@
                 status: saved.status === 'guessing' ? 'locked' : (saved.status || 'waiting'),
                 timerDuration: saved.timerDuration || prev.timerDuration,
                 roundsPlayed: saved.roundsPlayed || 0,
-                scoringMode: saved.scoringMode || 'fastest',
+                scoringMode: saved.scoringMode || 'all',
                 lastStartedRoundId: saved.lastStartedRoundId || null,
                 timerEndTime: 0
               }));
@@ -657,7 +657,7 @@
         if (role !== 'master' || !restoredRef.current) return;
         try {
           localStorage.setItem(`gm_master_session_${roomKey}`, JSON.stringify({
-            players, status: gameState.status, activeRoundId: gameState.activeRound?.id, timerDuration: gameState.timerDuration, roundsPlayed: gameState.roundsPlayed || 0, scoringMode: gameState.scoringMode || 'fastest', lastStartedRoundId: gameState.lastStartedRoundId || null, savedAt: Date.now()
+            players, status: gameState.status, activeRoundId: gameState.activeRound?.id, timerDuration: gameState.timerDuration, roundsPlayed: gameState.roundsPlayed || 0, scoringMode: gameState.scoringMode || 'all', lastStartedRoundId: gameState.lastStartedRoundId || null, savedAt: Date.now()
           }));
         } catch (e) {}
       }, [role, players, gameState.status, gameState.activeRound?.id, gameState.timerDuration, gameState.roundsPlayed, gameState.scoringMode]);
@@ -834,7 +834,7 @@
             const elapsedMs = Math.round(Number.isFinite(reported)
               ? Math.min(masterElapsed, Math.max(masterElapsed - 3000, reported, 0))
               : masterElapsed);
-            const allMode = (gs.scoringMode || 'fastest') === 'all';
+            const allMode = (gs.scoringMode || 'all') === 'all';
             setPlayers(prev => {
               const exists = prev.some(p => p.id === msgData.playerId);
               const base = exists ? prev : [...prev, { id: msgData.playerId, name: (msgData.name || 'Player').toString().slice(0, 40), score: 0, currentGuess: '', isCorrect: false }];
@@ -1030,7 +1030,7 @@
           duration: duration,
           remainingSec: duration,
           remainingMs: duration * 1000,
-          scoringMode: newState.scoringMode || 'fastest',
+          scoringMode: newState.scoringMode || 'all',
           ...roundInfo(newState),
           players: publicPlayers(clearedPlayers, 'guessing')
         });
@@ -1044,7 +1044,7 @@
       };
 
       const revealAnswer = () => {
-        const mode = gameState.scoringMode || 'fastest';
+        const mode = gameState.scoringMode || 'all';
         let finalPlayers = players;
         let fastest = gameState.fastest || null;
         // Award speed points once per round (clicking Reveal twice doesn't double-award)
@@ -1054,14 +1054,22 @@
             .sort((a, b) => (a.elapsedMs ?? 1e12) - (b.elapsedMs ?? 1e12));
           const winner = correct[0];
           fastest = winner ? { id: winner.id, name: winner.name, elapsedMs: winner.elapsedMs ?? null } : null;
-          if (mode !== 'all') {
-            const award = {};
-            if (mode === 'fastest' && correct[0]) award[correct[0].id] = 1;
-            if (mode === 'top3') [3, 2, 1].forEach((pts, i) => { if (correct[i]) award[correct[i].id] = pts; });
-            finalPlayers = players.map(p => award[p.id] ? { ...p, roundPoints: award[p.id], score: (p.score || 0) + award[p.id] } : { ...p, roundPoints: 0 });
-            setPlayers(finalPlayers);
-            playersRef.current = finalPlayers;
-          }
+          const award = {};
+          if (mode === 'fastest' && correct[0]) award[correct[0].id] = 1;
+          if (mode === 'top3') [3, 2, 1].forEach((pts, i) => { if (correct[i]) award[correct[i].id] = pts; });
+          finalPlayers = players.map(p => {
+            let next = p;
+            if (mode !== 'all') {
+              next = award[p.id] ? { ...next, roundPoints: award[p.id], score: (p.score || 0) + award[p.id] } : { ...next, roundPoints: 0 };
+            }
+            // Tie-break data: average time of correct answers
+            if (p.isCorrect && p.currentGuess && p.elapsedMs != null) {
+              next = { ...next, correctCount: (p.correctCount || 0) + 1, correctTimeMs: (p.correctTimeMs || 0) + p.elapsedMs };
+            }
+            return next;
+          });
+          setPlayers(finalPlayers);
+          playersRef.current = finalPlayers;
         }
         const revealedState = { ...gameState, status: 'revealed', timerEndTime: 0, awardedRoundKey: gameState.roundKey, fastest };
         setGameState(revealedState);
@@ -1242,18 +1250,21 @@
       const currentRoundIndex = rounds.findIndex(r => r.id === gameState.activeRound?.id);
       const hasNextRound = currentRoundIndex >= 0 && currentRoundIndex < rounds.length - 1;
       const hasPrevRound = currentRoundIndex > 0;
+      // Ranking: most points first; equal points -> faster average time on correct answers wins
+      const avgCorrectMs = (p) => (p.correctCount || 0) > 0 ? (p.correctTimeMs || 0) / p.correctCount : Infinity;
+      const beats = (a, b) => (a.score || 0) > (b.score || 0) || ((a.score || 0) === (b.score || 0) && avgCorrectMs(a) < avgCorrectMs(b));
+      const fmtAvg = (p) => (p.correctCount || 0) > 0 ? `avg ${(avgCorrectMs(p) / 1000).toFixed(1)}s` : '';
+      const rankedPlayers = [...players]
+        .sort((a, b) => (b.score || 0) - (a.score || 0) || (avgCorrectMs(a) - avgCorrectMs(b)) || String(a.name || '').localeCompare(String(b.name || '')))
+        .map(p => ({ ...p, rank: 1 + players.filter(o => o.id !== p.id && beats(o, p)).length }));
       const topScore = players.length > 0 ? Math.max(...players.map(p => p.score || 0)) : 0;
-      const leaders = topScore > 0 ? players.filter(p => (p.score || 0) === topScore) : [];
+      const leaders = topScore > 0 ? rankedPlayers.filter(p => p.rank === 1) : [];
       const myRecord = players.find(p => p.id === myPlayerId) || { score: 0, currentGuess: '', isCorrect: false };
       const myLocalGuess = myGuess.roundId && myGuess.roundId === gameState.activeRound?.id ? myGuess.text : '';
       const myPlayer = role === 'contestant'
         ? { ...myRecord, currentGuess: myLocalGuess || myRecord.currentGuess || '', isCorrect: isRevealPhase(gameState.status) ? !!myRecord.isCorrect : false }
         : myRecord;
 
-      // Highest score first; equal scores share the same rank
-      const rankedPlayers = [...players]
-        .sort((a, b) => (b.score || 0) - (a.score || 0) || String(a.name || '').localeCompare(String(b.name || '')))
-        .map(p => ({ ...p, rank: 1 + players.filter(o => (o.score || 0) > (p.score || 0)).length }));
 
       const getAnonymousLeaderLabel = () => {
         if (topScore === 0 || leaders.length === 0) return '0 pts';
@@ -1704,15 +1715,15 @@
                       </button>
 
                       <select
-                        value={gameState.scoringMode || 'fastest'}
+                        value={gameState.scoringMode || 'all'}
                         disabled={gameState.status === 'guessing' || gameState.status === 'locked'}
                         onChange={(e) => { const v = e.target.value; setGameState(prev => ({ ...prev, scoringMode: v })); scheduleSync(); }}
                         title="Scoring (change between rounds)"
                         className="text-xs bg-zinc-800 text-[#D4AF37] border border-zinc-700 px-2 py-1.5 rounded-xl font-bold disabled:opacity-50"
                       >
+                        <option value="all">Scoring: All correct (1 pt) + fastest average wins ties</option>
                         <option value="fastest">Scoring: Fastest only (1 pt)</option>
                         <option value="top3">Scoring: Top 3 fastest (3/2/1)</option>
-                        <option value="all">Scoring: All correct (1 pt)</option>
                       </select>
 
                       <div className="text-xs text-zinc-400 flex items-center gap-1.5 px-3 py-1.5 bg-zinc-950 rounded-xl border border-zinc-800">
@@ -1730,7 +1741,7 @@
                             Active Round: Item #{currentRoundIndex + 1}
                           </span>
                           <span className="text-xs bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-bold">
-                            {SCORING_LABELS[gameState.scoringMode || 'fastest']}
+                            {SCORING_LABELS[gameState.scoringMode || 'all']}
                           </span>
                         </div>
                         <div className="flex items-center gap-1">
@@ -1878,13 +1889,13 @@
                               </td>
                             </tr>
                           ) : (
-                            players.map((p, idx) => {
-                              const isTop = topScore > 0 && p.score === topScore;
+                            rankedPlayers.map((p) => {
+                              const isTop = topScore > 0 && p.rank === 1;
                               return (
                                 <tr key={p.id} className={isTop ? 'bg-[#D4AF37]/5' : ''}>
                                   <td className="px-5 py-3">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-xs font-bold text-zinc-500">#{idx + 1}</span>
+                                      <span className="text-xs font-bold text-zinc-500">#{p.rank}</span>
                                       <span className="font-semibold text-white">{p.name}</span>
                                       {isTop && (
                                         <span className="text-[10px] bg-[#D4AF37] text-zinc-950 font-bold px-1.5 py-0.2 rounded-full">#1</span>
@@ -1906,7 +1917,7 @@
                                       p.isCorrect ? (
                                         <span className="text-[11px] bg-green-950 text-green-300 px-2 py-0.5 rounded border border-green-800 font-bold">
                                           {gameState.fastest?.id === p.id && (gameState.status === 'revealed' || gameState.status === 'ended') ? '⚡ ' : '✓ '}
-                                          Correct ({(gameState.scoringMode || 'fastest') === 'all' || gameState.status === 'revealed' || gameState.status === 'ended' ? '+' + (p.roundPoints || 0) : 'pts at reveal'})
+                                          Correct ({(gameState.scoringMode || 'all') === 'all' || gameState.status === 'revealed' || gameState.status === 'ended' ? '+' + (p.roundPoints || 0) : 'pts at reveal'})
                                         </span>
                                       ) : (
                                         <span className="text-[11px] bg-red-950 text-red-400 px-2 py-0.5 rounded border border-red-900">
@@ -1919,6 +1930,7 @@
                                   </td>
                                   <td className="px-5 py-3">
                                     <span className="font-bold text-base text-[#D4AF37]">{p.score || 0} pts</span>
+                                    {fmtAvg(p) && <span className="block text-[10px] text-zinc-500">{fmtAvg(p)}</span>}
                                   </td>
                                   <td className="px-5 py-3 text-right space-x-1">
                                     <button
@@ -2275,7 +2287,10 @@
                               }`}>
                                 #{p.rank}
                               </span>
-                              <span className="text-sm font-semibold text-white">{p.name}{isMe ? ' (You)' : ''}</span>
+                              <span className="text-sm font-semibold text-white">
+                                {p.name}{isMe ? ' (You)' : ''}
+                                {fmtAvg(p) && <span className="block text-[10px] font-normal text-zinc-500">{fmtAvg(p)} per correct answer</span>}
+                              </span>
                             </div>
                             <span className="font-bold text-[#D4AF37] text-sm">{p.score || 0} pts</span>
                           </div>
@@ -2450,7 +2465,7 @@
                           <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
                             Guess the Perfume Brand ({displaySeconds}s)
                           </label>
-                          <p className="text-[10px] text-orange-300">{SCORING_LABELS[gameState.scoringMode || 'fastest']}. Speed counts!</p>
+                          <p className="text-[10px] text-orange-300">{SCORING_LABELS[gameState.scoringMode || 'all']}. Speed counts!</p>
                           <input
                             type="text"
                             placeholder="Type brand name (e.g. Prada)..."
