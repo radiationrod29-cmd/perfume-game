@@ -576,9 +576,11 @@
 
       // What phones are allowed to see. Answers and reveal photo stay on the master until reveal.
       const isRevealPhase = (status) => status === 'revealed' || status === 'ended';
+      // Scoring modes: 'all' = every correct answer 1 pt, 'fastest' = only the fastest correct 1 pt, 'top3' = fastest three correct 3/2/1 pts
+      const SCORING_LABELS = { all: 'Every correct answer = 1 pt', fastest: 'Fastest correct answer only = 1 pt', top3: 'Top 3 fastest correct = 3 / 2 / 1 pts' };
       const publicPlayers = (list, status) => (list || []).map(p => isRevealPhase(status)
-        ? { id: p.id, name: p.name, score: p.score || 0, currentGuess: p.currentGuess || '', isCorrect: !!p.isCorrect }
-        : { id: p.id, name: p.name, score: Math.max(0, (p.score || 0) - (p.isCorrect ? 1 : 0)), hasGuessed: !!p.currentGuess }); // this round's point stays hidden until reveal
+        ? { id: p.id, name: p.name, score: p.score || 0, currentGuess: p.currentGuess || '', isCorrect: !!p.isCorrect, elapsedMs: p.elapsedMs ?? null, roundPoints: p.roundPoints || 0 }
+        : { id: p.id, name: p.name, score: Math.max(0, (p.score || 0) - (p.roundPoints || 0)), hasGuessed: !!p.currentGuess }); // this round's points stay hidden until reveal
       const publicRound = (r, status) => {
         if (!r) return null;
         if (isRevealPhase(status)) {
@@ -590,6 +592,9 @@
         status: gs.status,
         timerDuration: gs.timerDuration || 10,
         remainingSec: gs.status === 'guessing' ? Math.max(0, Math.ceil(((gs.timerEndTime || 0) - Date.now()) / 1000)) : 0,
+        remainingMs: gs.status === 'guessing' ? Math.max(0, (gs.timerEndTime || 0) - Date.now()) : 0,
+        scoringMode: gs.scoringMode || 'fastest',
+        fastest: isRevealPhase(gs.status) ? (gs.fastest || null) : null,
         showLeaderboard: !!gs.showLeaderboard,
         customLogo: gs.customLogo || null,
         activeRound: publicRound(gs.activeRound, gs.status),
@@ -640,6 +645,7 @@
                 status: saved.status === 'guessing' ? 'locked' : (saved.status || 'waiting'),
                 timerDuration: saved.timerDuration || prev.timerDuration,
                 roundsPlayed: saved.roundsPlayed || 0,
+                scoringMode: saved.scoringMode || 'fastest',
                 lastStartedRoundId: saved.lastStartedRoundId || null,
                 timerEndTime: 0
               }));
@@ -651,10 +657,10 @@
         if (role !== 'master' || !restoredRef.current) return;
         try {
           localStorage.setItem(`gm_master_session_${roomKey}`, JSON.stringify({
-            players, status: gameState.status, activeRoundId: gameState.activeRound?.id, timerDuration: gameState.timerDuration, roundsPlayed: gameState.roundsPlayed || 0, lastStartedRoundId: gameState.lastStartedRoundId || null, savedAt: Date.now()
+            players, status: gameState.status, activeRoundId: gameState.activeRound?.id, timerDuration: gameState.timerDuration, roundsPlayed: gameState.roundsPlayed || 0, scoringMode: gameState.scoringMode || 'fastest', lastStartedRoundId: gameState.lastStartedRoundId || null, savedAt: Date.now()
           }));
         } catch (e) {}
-      }, [role, players, gameState.status, gameState.activeRound?.id, gameState.timerDuration, gameState.roundsPlayed]);
+      }, [role, players, gameState.status, gameState.activeRound?.id, gameState.timerDuration, gameState.roundsPlayed, gameState.scoringMode]);
       // Set initial round if needed
       useEffect(() => {
         if (roleRef.current !== 'contestant' && !gameState.activeRound && rounds.length > 0) {
@@ -822,12 +828,20 @@
             const guess = (msgData.guess || '').toString().slice(0, 80);
             if (!guess.trim()) return;
             const isMatched = checkAnswerMatch(guess, active.option1 || active.brand || '', active.option2 || active.name || '');
+            // Speed: trust the phone's own stopwatch (fair across countries), but never more than 3s faster than the master saw it arrive
+            const masterElapsed = Math.max(0, Date.now() - (roundStartAtRef.current || Date.now()));
+            const reported = Number(msgData.elapsedMs);
+            const elapsedMs = Math.round(Number.isFinite(reported)
+              ? Math.min(masterElapsed, Math.max(masterElapsed - 3000, reported, 0))
+              : masterElapsed);
+            const allMode = (gs.scoringMode || 'fastest') === 'all';
             setPlayers(prev => {
               const exists = prev.some(p => p.id === msgData.playerId);
               const base = exists ? prev : [...prev, { id: msgData.playerId, name: (msgData.name || 'Player').toString().slice(0, 40), score: 0, currentGuess: '', isCorrect: false }];
               return base.map(p => {
                 if (p.id !== msgData.playerId || p.currentGuess) return p; // one locked guess per round
-                return { ...p, currentGuess: guess, isCorrect: isMatched, score: (p.score || 0) + (isMatched ? 1 : 0) };
+                const pts = allMode && isMatched ? 1 : 0; // speed modes award at reveal
+                return { ...p, currentGuess: guess, isCorrect: isMatched, elapsedMs, roundPoints: pts, score: (p.score || 0) + pts };
               });
             });
             schedulePlayers();
@@ -840,11 +854,13 @@
         setNetStatus('connected');
 
         if (msgData.type === 'ROUND_START') {
-          const sec = msgData.remainingSec || msgData.duration || 10;
+          const ms = msgData.remainingMs || (msgData.remainingSec || msgData.duration || 10) * 1000;
           setGameState(prev => ({
             ...prev,
             status: 'guessing',
-            timerEndTime: Date.now() + sec * 1000,
+            timerEndTime: Date.now() + ms,
+            scoringMode: msgData.scoringMode || prev.scoringMode,
+            fastest: null,
             timerDuration: msgData.duration || 10,
             activeRound: msgData.activeRound || prev.activeRound,
             roundNumber: msgData.roundNumber || prev.roundNumber,
@@ -868,7 +884,7 @@
         } else if (msgData.type === 'ROUND_LOCKED') {
           setGameState(prev => ({ ...prev, status: 'locked', timerEndTime: 0 }));
         } else if (msgData.type === 'ROUND_REVEAL') {
-          setGameState(prev => ({ ...prev, status: 'revealed', timerEndTime: 0, activeRound: msgData.revealRound || prev.activeRound }));
+          setGameState(prev => ({ ...prev, status: 'revealed', timerEndTime: 0, activeRound: msgData.revealRound || prev.activeRound, fastest: msgData.fastest || null, scoringMode: msgData.scoringMode || prev.scoringMode }));
           if (Array.isArray(msgData.players)) setPlayers(mergeWithMe(msgData.players));
         } else if (msgData.type === 'GAME_ENDED') {
           setGameState(prev => ({ ...prev, status: 'ended', timerEndTime: 0 }));
@@ -879,7 +895,7 @@
             setGameState(prev => {
               let endTime = prev.timerEndTime;
               if (st.status === 'guessing' && (prev.status !== 'guessing' || prev.activeRound?.id !== st.activeRound?.id)) {
-                endTime = Date.now() + (st.remainingSec || 0) * 1000;
+                endTime = Date.now() + (st.remainingMs || (st.remainingSec || 0) * 1000);
               }
               return {
                 ...prev,
@@ -891,7 +907,9 @@
                 customLogo: st.customLogo || prev.customLogo,
                 roundNumber: st.roundNumber || 0,
                 totalRounds: st.totalRounds || 0,
-                roundsPlayed: st.roundsPlayed || 0
+                roundsPlayed: st.roundsPlayed || 0,
+                scoringMode: st.scoringMode || prev.scoringMode,
+                fastest: st.fastest || null
               };
             });
           }
@@ -980,14 +998,16 @@
         };
       }, [roomKey, role]);
       // --- GAME MASTER ACTIONS ---
+      const roundStartAtRef = useRef(0);
       const startTimer = () => {
         if (!gameState.activeRound) return;
         const duration = gameState.timerDuration || 10;
         const endTime = Date.now() + duration * 1000;
 
-        const clearedPlayers = players.map(p => ({ ...p, currentGuess: '', isCorrect: false }));
+        const clearedPlayers = players.map(p => ({ ...p, currentGuess: '', isCorrect: false, elapsedMs: null, roundPoints: 0 }));
         setPlayers(clearedPlayers);
         playersRef.current = clearedPlayers;
+        roundStartAtRef.current = Date.now();
 
         const isNewRound = gameState.lastStartedRoundId !== gameState.activeRound.id;
         const newState = {
@@ -995,6 +1015,9 @@
           status: 'guessing',
           timerEndTime: endTime,
           lastStartedRoundId: gameState.activeRound.id,
+          roundKey: gameState.activeRound.id + ':' + Date.now(),
+          awardedRoundKey: null,
+          fastest: null,
           roundsPlayed: (gameState.roundsPlayed || 0) + (isNewRound ? 1 : 0)
         };
         setGameState(newState);
@@ -1006,6 +1029,8 @@
           activeRound: publicRound(newState.activeRound, 'guessing'),
           duration: duration,
           remainingSec: duration,
+          remainingMs: duration * 1000,
+          scoringMode: newState.scoringMode || 'fastest',
           ...roundInfo(newState),
           players: publicPlayers(clearedPlayers, 'guessing')
         });
@@ -1019,14 +1044,35 @@
       };
 
       const revealAnswer = () => {
-        const revealedState = { ...gameState, status: 'revealed', timerEndTime: 0 };
+        const mode = gameState.scoringMode || 'fastest';
+        let finalPlayers = players;
+        let fastest = gameState.fastest || null;
+        // Award speed points once per round (clicking Reveal twice doesn't double-award)
+        if (gameState.awardedRoundKey !== gameState.roundKey) {
+          const correct = players
+            .filter(p => p.isCorrect && p.currentGuess)
+            .sort((a, b) => (a.elapsedMs ?? 1e12) - (b.elapsedMs ?? 1e12));
+          const winner = correct[0];
+          fastest = winner ? { id: winner.id, name: winner.name, elapsedMs: winner.elapsedMs ?? null } : null;
+          if (mode !== 'all') {
+            const award = {};
+            if (mode === 'fastest' && correct[0]) award[correct[0].id] = 1;
+            if (mode === 'top3') [3, 2, 1].forEach((pts, i) => { if (correct[i]) award[correct[i].id] = pts; });
+            finalPlayers = players.map(p => award[p.id] ? { ...p, roundPoints: award[p.id], score: (p.score || 0) + award[p.id] } : { ...p, roundPoints: 0 });
+            setPlayers(finalPlayers);
+            playersRef.current = finalPlayers;
+          }
+        }
+        const revealedState = { ...gameState, status: 'revealed', timerEndTime: 0, awardedRoundKey: gameState.roundKey, fastest };
         setGameState(revealedState);
         gameStateRef.current = revealedState;
         broadcastMessage({
           type: 'ROUND_REVEAL',
           activeRoundId: gameState.activeRound?.id,
           revealRound: publicRound(gameState.activeRound, 'revealed'),
-          players: publicPlayers(players, 'revealed')
+          fastest,
+          scoringMode: mode,
+          players: publicPlayers(finalPlayers, 'revealed')
         });
       };
 
@@ -1055,8 +1101,8 @@
       };
 
       const selectRound = (round, jumpToArena = true) => {
-        const clearedPlayers = players.map(p => ({ ...p, currentGuess: '', isCorrect: false }));
-        const newState = { ...gameState, activeRound: round, status: 'waiting', timerEndTime: 0 };
+        const clearedPlayers = players.map(p => ({ ...p, currentGuess: '', isCorrect: false, elapsedMs: null, roundPoints: 0 }));
+        const newState = { ...gameState, activeRound: round, status: 'waiting', timerEndTime: 0, fastest: null };
         setPlayers(clearedPlayers);
         playersRef.current = clearedPlayers;
         setGameState(newState);
@@ -1164,6 +1210,17 @@
         broadcastMessage({ type: 'PLAYER_JOIN', id: myPlayerId, name: trimmed });
       };
 
+      // Phone stopwatch for this round: starts when the photo appears, adjusted if the phone joined mid-round
+      const roundClockRef = useRef({ roundId: null, offsetMs: 0, shownAt: 0 });
+      useEffect(() => {
+        if (role !== 'contestant' || gameState.status !== 'guessing' || !gameState.activeRound) return;
+        const id = gameState.activeRound.id + ':' + (gameState.timerEndTime || 0);
+        if (roundClockRef.current.roundId === id) return;
+        const totalMs = (gameState.timerDuration || 10) * 1000;
+        const leftMs = Math.max(0, (gameState.timerEndTime || 0) - Date.now());
+        roundClockRef.current = { roundId: id, offsetMs: Math.max(0, totalMs - leftMs), shownAt: performance.now() };
+      }, [role, gameState.status, gameState.activeRound?.id, gameState.timerEndTime]);
+
       const submitContestantGuess = (e) => {
         e.preventDefault();
         const roundId = gameState.activeRound?.id;
@@ -1177,7 +1234,8 @@
           playerId: myPlayerId,
           name: contestantName || 'Player',
           guess: text,
-          roundId
+          roundId,
+          elapsedMs: Math.round(roundClockRef.current.offsetMs + (performance.now() - roundClockRef.current.shownAt))
         });
       };
       // Computed Values
@@ -1645,6 +1703,18 @@
                         <Icon name="settings" className="w-3 h-3 text-zinc-400" />
                       </button>
 
+                      <select
+                        value={gameState.scoringMode || 'fastest'}
+                        disabled={gameState.status === 'guessing' || gameState.status === 'locked'}
+                        onChange={(e) => { const v = e.target.value; setGameState(prev => ({ ...prev, scoringMode: v })); scheduleSync(); }}
+                        title="Scoring (change between rounds)"
+                        className="text-xs bg-zinc-800 text-[#D4AF37] border border-zinc-700 px-2 py-1.5 rounded-xl font-bold disabled:opacity-50"
+                      >
+                        <option value="fastest">Scoring: Fastest only (1 pt)</option>
+                        <option value="top3">Scoring: Top 3 fastest (3/2/1)</option>
+                        <option value="all">Scoring: All correct (1 pt)</option>
+                      </select>
+
                       <div className="text-xs text-zinc-400 flex items-center gap-1.5 px-3 py-1.5 bg-zinc-950 rounded-xl border border-zinc-800">
                         <Icon name="users" className="w-3.5 h-3.5 text-[#D4AF37]" />
                         <span>{players.length} Contestants</span>
@@ -1660,7 +1730,7 @@
                             Active Round: Item #{currentRoundIndex + 1}
                           </span>
                           <span className="text-xs bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-bold">
-                            1 Point per Guess
+                            {SCORING_LABELS[gameState.scoringMode || 'fastest']}
                           </span>
                         </div>
                         <div className="flex items-center gap-1">
@@ -1825,6 +1895,7 @@
                                     {p.currentGuess ? (
                                       <span className="px-2.5 py-1 rounded bg-zinc-800 text-white text-xs border border-zinc-700 font-mono">
                                         {p.currentGuess}
+                                        {p.elapsedMs != null && <span className="text-zinc-500 ml-1.5">{(p.elapsedMs / 1000).toFixed(1)}s</span>}
                                       </span>
                                     ) : (
                                       <span className="text-zinc-600 text-xs italic">Awaiting...</span>
@@ -1834,7 +1905,8 @@
                                     {p.currentGuess ? (
                                       p.isCorrect ? (
                                         <span className="text-[11px] bg-green-950 text-green-300 px-2 py-0.5 rounded border border-green-800 font-bold">
-                                          ✓ Correct (+1)
+                                          {gameState.fastest?.id === p.id && (gameState.status === 'revealed' || gameState.status === 'ended') ? '⚡ ' : '✓ '}
+                                          Correct ({(gameState.scoringMode || 'fastest') === 'all' || gameState.status === 'revealed' || gameState.status === 'ended' ? '+' + (p.roundPoints || 0) : 'pts at reveal'})
                                         </span>
                                       ) : (
                                         <span className="text-[11px] bg-red-950 text-red-400 px-2 py-0.5 rounded border border-red-900">
@@ -2337,9 +2409,9 @@
                               <span className="text-[#D4AF37] text-[10px] uppercase font-bold tracking-widest">Official Answer</span>
                             </div>
                             <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg ${
-                              myPlayer.isCorrect ? 'bg-green-950 text-green-300 border border-green-700' : 'bg-zinc-800 text-zinc-400'
+                              myRecord.roundPoints > 0 ? 'bg-green-950 text-green-300 border border-green-700' : 'bg-zinc-800 text-zinc-400'
                             }`}>
-                              {myPlayer.isCorrect ? '+1 Pt Earned! 🎉' : '+0 Pts'}
+                              {myRecord.roundPoints > 0 ? `+${myRecord.roundPoints} Pt${myRecord.roundPoints > 1 ? 's' : ''} Earned! 🎉` : '+0 Pts'}
                             </span>
                           </div>
 
@@ -2359,10 +2431,18 @@
                           <div className="flex items-center justify-between text-xs bg-zinc-950/80 p-2 rounded-xl border border-zinc-800">
                             <span className="text-zinc-400">Your Guess: <strong className="text-white ml-1">{myPlayer.currentGuess || '(None)'}</strong></span>
                             {myPlayer.isCorrect ? (
-                              <span className="text-green-400 font-bold flex items-center gap-1">✓ Correct</span>
+                              <span className="text-green-400 font-bold flex items-center gap-1">✓ Correct{myRecord.elapsedMs != null ? ` · ${(myRecord.elapsedMs / 1000).toFixed(1)}s` : ''}</span>
                             ) : (
                               <span className="text-red-400 font-medium">Incorrect</span>
                             )}
+                          </div>
+
+                          <div className="text-[11px] text-center bg-orange-950/40 border border-orange-900/60 rounded-xl px-2 py-1.5 text-orange-300">
+                            {gameState.fastest
+                              ? (gameState.fastest.id === myPlayerId
+                                  ? `⚡ You were the fastest correct answer${gameState.fastest.elapsedMs != null ? ` (${(gameState.fastest.elapsedMs / 1000).toFixed(1)}s)` : ''}!`
+                                  : `⚡ Fastest correct: ${gameState.fastest.name}${gameState.fastest.elapsedMs != null ? ` (${(gameState.fastest.elapsedMs / 1000).toFixed(1)}s)` : ''}${myPlayer.isCorrect && !(myRecord.roundPoints > 0) ? ' · you were correct but slower' : ''}`)
+                              : 'Nobody got this one right.'}
                           </div>
                         </div>
                       ) : gameState.status === 'guessing' && !myPlayer.currentGuess ? (
@@ -2370,6 +2450,7 @@
                           <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
                             Guess the Perfume Brand ({displaySeconds}s)
                           </label>
+                          <p className="text-[10px] text-orange-300">{SCORING_LABELS[gameState.scoringMode || 'fastest']}. Speed counts!</p>
                           <input
                             type="text"
                             placeholder="Type brand name (e.g. Prada)..."
